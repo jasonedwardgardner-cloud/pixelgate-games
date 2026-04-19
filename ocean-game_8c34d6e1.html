@@ -1,0 +1,2620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Feed — Eat to Grow</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:#030b1a; font-family:'Fredoka',sans-serif; touch-action:none; }
+canvas { display:block; width:100%; height:100%; }
+canvas.hide-cursor { cursor:none; }
+
+#hud {
+  position:fixed; top:0; left:0; right:0; padding:16px 24px;
+  display:flex; justify-content:space-between; align-items:flex-start;
+  pointer-events:none; z-index:10;
+}
+#hud-left { display:flex; flex-direction:column; gap:6px; }
+#tier-name {
+  font-size:28px; font-weight:700; color:#7df9ff;
+  text-shadow: 0 0 12px rgba(125,249,255,.5), 0 2px 4px rgba(0,0,0,.6);
+  letter-spacing:1px;
+}
+#level-bar-wrap {
+  position:relative; width:220px; height:22px;
+  background:rgba(0,20,60,.65); border-radius:11px;
+  border:1.5px solid rgba(125,249,255,.25); overflow:hidden;
+}
+#level-bar {
+  height:100%; width:0%; border-radius:11px;
+  background:linear-gradient(90deg,#0ff5,#7df9ff);
+  transition:width .3s ease;
+}
+#level-text {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace; font-size:11px; color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.8);
+}
+
+#hud-right { text-align:right; display:flex; flex-direction:column; gap:6px; }
+#score {
+  font-family:'JetBrains Mono',monospace; font-size:18px; color:#e0f0ff;
+  text-shadow:0 0 8px rgba(100,200,255,.4), 0 2px 4px rgba(0,0,0,.5);
+}
+#boost-indicator {
+  font-size:15px; font-weight:600; color:#7df9ff;
+  text-shadow:0 0 10px rgba(125,249,255,.7);
+  animation: boostPulse .5s ease-in-out infinite alternate;
+}
+#boost-indicator.hidden { display:none; }
+#freeze-bar-wrap {
+  margin-top:4px; width:100%; height:4px;
+  background:rgba(125,249,255,0.15); border-radius:2px; overflow:hidden;
+}
+#freeze-bar {
+  height:100%; width:100%; border-radius:2px;
+  background:linear-gradient(90deg,#7df9ff,#4facfe);
+  transition:width 0.1s linear;
+}
+@keyframes boostPulse { from{opacity:.7;transform:scale(.97)} to{opacity:1;transform:scale(1.03)} }
+
+#overlay, #start-screen {
+  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  z-index:100; background:rgba(2,8,24,.82); backdrop-filter:blur(6px);
+}
+#overlay.hidden { display:none; }
+#overlay-box, #start-box {
+  text-align:center; padding:48px 56px; border-radius:20px;
+  background:linear-gradient(135deg,rgba(10,30,80,.85),rgba(5,15,45,.9));
+  border:1.5px solid rgba(125,249,255,.2);
+  box-shadow:0 0 60px rgba(0,150,255,.15), inset 0 1px 0 rgba(255,255,255,.06);
+}
+#overlay-box h1, #start-box h1 {
+  font-size:42px; font-weight:700; margin-bottom:12px;
+  background:linear-gradient(135deg,#7df9ff,#4facfe);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+}
+#overlay-box p, #start-box p { color:#a0c4e8; font-size:16px; line-height:1.6; margin-bottom:8px; }
+.controls { font-size:13px!important; color:#6a8db8!important; margin-top:4px; }
+#restart-btn, #start-btn {
+  margin-top:24px; padding:14px 40px; font-family:'Fredoka',sans-serif;
+  font-size:18px; font-weight:600; color:#030b1a; border:none; border-radius:12px;
+  background:linear-gradient(135deg,#7df9ff,#4facfe); cursor:pointer;
+  transition:transform .15s, box-shadow .15s; pointer-events:all;
+  box-shadow:0 4px 20px rgba(125,249,255,.3);
+}
+#restart-btn:hover, #start-btn:hover { transform:scale(1.05); box-shadow:0 6px 30px rgba(125,249,255,.45); }
+#home-btn {
+  margin-top:12px; padding:10px 30px; font-family:'Fredoka',sans-serif;
+  font-size:15px; font-weight:600; color:#a0c4e8; border:1.5px solid rgba(125,249,255,0.2);
+  border-radius:10px; background:rgba(125,249,255,0.06); cursor:pointer;
+  transition:all .15s; pointer-events:all;
+}
+#home-btn:hover { background:rgba(255,100,80,0.15); border-color:rgba(255,100,80,0.4); color:#ff8870; }
+#overlay-msg { margin-bottom:4px; }
+
+#start-screen.hidden { display:none; }
+
+.control-select { display:flex; gap:10px; justify-content:center; margin-top:16px; margin-bottom:8px; }
+.ctrl-btn {
+  padding:10px 20px; font-family:'Fredoka',sans-serif; font-size:14px; font-weight:600;
+  color:#a0c4e8; background:rgba(125,249,255,0.08); border:1.5px solid rgba(125,249,255,0.2);
+  border-radius:10px; cursor:pointer; transition:all .15s; pointer-events:all;
+}
+.ctrl-btn:hover { background:rgba(125,249,255,0.15); border-color:rgba(125,249,255,0.4); color:#fff; }
+.ctrl-btn.selected {
+  background:rgba(125,249,255,0.2); border-color:#7df9ff; color:#7df9ff;
+  box-shadow:0 0 12px rgba(125,249,255,0.3);
+}
+.ctrl-btn .ctrl-keys {
+  display:block; font-family:'JetBrains Mono',monospace; font-size:11px;
+  color:#6a8db8; margin-top:2px;
+}
+.ctrl-btn.selected .ctrl-keys { color:#7df9ff; opacity:0.7; }
+.biome-btn {
+  padding:10px 20px; font-family:'Fredoka',sans-serif; font-size:14px; font-weight:600;
+  color:#a0c4e8; background:rgba(125,249,255,0.08); border:1.5px solid rgba(125,249,255,0.2);
+  border-radius:10px; cursor:pointer; transition:all .15s; pointer-events:all;
+}
+.biome-btn:hover { background:rgba(125,249,255,0.15); border-color:rgba(125,249,255,0.4); color:#fff; }
+.biome-btn.selected {
+  background:rgba(125,249,255,0.2); border-color:#7df9ff; color:#7df9ff;
+  box-shadow:0 0 12px rgba(125,249,255,0.3);
+}
+.biome-btn .ctrl-keys {
+  display:block; font-family:'JetBrains Mono',monospace; font-size:11px;
+  color:#6a8db8; margin-top:2px;
+}
+.biome-btn.selected .ctrl-keys { color:#7df9ff; opacity:0.7; }
+.biome-btn.locked {
+  opacity:0.4; pointer-events:none; filter:grayscale(0.5);
+}
+
+/* Sound toggle */
+#sound-toggle {
+  position:fixed; top:16px; left:50%; transform:translateX(-50%);
+  z-index:12; pointer-events:all; cursor:pointer;
+  width:36px; height:36px; border-radius:50%;
+  background:rgba(0,20,60,0.6); border:1.5px solid rgba(125,249,255,0.25);
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s; color:#7df9ff; font-size:18px; line-height:1;
+  backdrop-filter:blur(4px);
+}
+#sound-toggle:hover { background:rgba(0,20,60,0.8); border-color:rgba(125,249,255,0.5); }
+#sound-toggle.muted { color:#6a8db8; border-color:rgba(100,140,180,0.25); }
+
+/* Touch joystick */
+#touch-zone {
+  display:none; position:fixed; bottom:20px; left:20px; z-index:15;
+  width:140px; height:140px; pointer-events:all;
+}
+#joystick-base {
+  position:absolute; inset:0; border-radius:50%;
+  background:rgba(125,249,255,0.06); border:2px solid rgba(125,249,255,0.15);
+}
+#joystick-knob {
+  position:absolute; width:50px; height:50px; border-radius:50%;
+  background:rgba(125,249,255,0.2); border:2px solid rgba(125,249,255,0.35);
+  top:50%; left:50%; transform:translate(-50%,-50%);
+  transition:none;
+}
+
+/* Mobile pause button */
+#pause-btn {
+  display:none; position:fixed; top:16px; right:24px; z-index:15;
+  pointer-events:all; cursor:pointer;
+  width:36px; height:36px; border-radius:50%;
+  background:rgba(0,20,60,0.6); border:1.5px solid rgba(125,249,255,0.25);
+  color:#7df9ff; font-size:18px; line-height:36px; text-align:center;
+  backdrop-filter:blur(4px);
+}
+#pause-btn:hover { background:rgba(0,20,60,0.8); border-color:rgba(125,249,255,0.5); }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<button id="sound-toggle" title="Toggle sound">&#x1f50a;</button>
+<div id="touch-zone">
+  <div id="joystick-base"></div>
+  <div id="joystick-knob"></div>
+</div>
+<button id="pause-btn">&#x23f8;</button>
+<div id="hud">
+  <div id="hud-left">
+    <div id="tier-name">Fry</div>
+    <div id="level-bar-wrap">
+      <div id="level-bar"></div>
+      <span id="level-text">0 / 8</span>
+    </div>
+  </div>
+  <div id="hud-right">
+    <div id="score">Score: 0</div>
+    <div id="boost-indicator" class="hidden">FISH FROZEN
+      <div id="freeze-bar-wrap"><div id="freeze-bar"></div></div>
+    </div>
+  </div>
+</div>
+<div id="overlay" class="hidden">
+  <div id="overlay-box">
+    <h1 id="overlay-title">Game Over</h1>
+    <p id="overlay-msg">You were eaten!</p>
+    <button id="restart-btn">Dive Again</button>
+    <div id="home-section" style="display:none">
+      <button id="home-btn">Return Home</button>
+      <p class="controls" style="margin-top:8px">Progress will be lost</p>
+    </div>
+  </div>
+</div>
+<div id="start-screen">
+  <div id="start-box">
+    <h1>Deep Feed</h1>
+    <p>Eat smaller fish to grow. Avoid bigger ones.<br>Reach Giant size to win!</p>
+    <p class="controls">Choose your world:</p>
+    <div class="control-select" id="biome-select">
+      <button class="biome-btn selected" data-biome="0">Open Ocean<span class="ctrl-keys">Fish</span></button>
+      <button class="biome-btn locked" data-biome="1">Coral Reef<span class="ctrl-keys">Jellyfish</span></button>
+      <button class="biome-btn locked" data-biome="2">Abyssal Depths<span class="ctrl-keys">Seahorse</span></button>
+    </div>
+    <p class="controls">Choose your controls:</p>
+    <div class="control-select">
+      <button class="ctrl-btn selected" data-ctrl="mouse">Mouse<span class="ctrl-keys">Point &amp; follow</span></button>
+      <button class="ctrl-btn" data-ctrl="wasd">WASD<span class="ctrl-keys">W A S D</span></button>
+      <button class="ctrl-btn" data-ctrl="arrows">Arrows<span class="ctrl-keys">&larr; &uarr; &darr; &rarr;</span></button>
+      <button class="ctrl-btn" data-ctrl="touch">Touch<span class="ctrl-keys">Virtual joystick</span></button>
+    </div>
+    <p class="controls">Escape to pause &bull; Catch golden shrimp to freeze fish!<br>Touch devices: use the pause button in the top-right corner</p>
+    <button id="start-btn">Start</button>
+  </div>
+</div>
+<script>
+// ── CONSTANTS & CONFIG ──
+const WORLD_W = 4000, WORLD_H = 3000;
+// XP required per level — ramps up so late game is harder
+const XP_PER_LEVEL_TABLE = [8, 9, 10, 11, 13, 15, 17, 20, 23, 26, 30, 34, 38, 42];
+function xpForLevel(tier){ return XP_PER_LEVEL_TABLE[Math.min(tier, XP_PER_LEVEL_TABLE.length-1)]; }
+const TIERS = [
+  {name:'Fry',         size:12, color:'#88ddff', bodyH:.45, fins:0},
+  {name:'Minnow',      size:16, color:'#66ccee', bodyH:.48, fins:0},
+  {name:'Guppy',       size:21, color:'#44bbdd', bodyH:.48, fins:1},
+  {name:'Sardine',     size:27, color:'#55eebb', bodyH:.46, fins:1},
+  {name:'Perch',       size:34, color:'#99dd55', bodyH:.50, fins:1},
+  {name:'Bass',        size:42, color:'#eebb33', bodyH:.52, fins:2},
+  {name:'Snapper',     size:52, color:'#ff9944', bodyH:.50, fins:2},
+  {name:'Grouper',     size:64, color:'#ff6655', bodyH:.55, fins:2},
+  {name:'Barracuda',   size:78, color:'#dd44aa', bodyH:.40, fins:2},
+  {name:'Tuna',        size:94, color:'#aa55ff', bodyH:.52, fins:3},
+  {name:'Swordfish',   size:112,color:'#6677ff', bodyH:.38, fins:3},
+  {name:'Shark',       size:132,color:'#8899aa', bodyH:.48, fins:3},
+  {name:'Orca',        size:156,color:'#334455', bodyH:.55, fins:3},
+  {name:'Whale',       size:186,color:'#2244aa', bodyH:.60, fins:3},
+  {name:'Giant',       size:222,color:'#ffdd44', bodyH:.58, fins:3},
+];
+const BIOMES = [
+  {name:'Open Ocean',     bgTop:[5,25,60],  bgBot:[2,12,35],  creatureType:'fish',      npcCreatureTypes:['fish']},
+  {name:'Coral Reef',     bgTop:[20,10,50], bgBot:[8,4,28],   creatureType:'jellyfish',  npcCreatureTypes:['fish','jellyfish']},
+  {name:'Abyssal Depths', bgTop:[2,5,18],   bgBot:[1,2,8],    creatureType:'seahorse',   npcCreatureTypes:['fish','jellyfish','seahorse']},
+];
+
+const NPC_COUNT = 80;
+const BUBBLE_COUNT = 60;
+const RAY_COUNT = 7;
+const SHRIMP_INTERVAL = 12000; // ms between golden shrimp spawns
+const BOOST_DURATION = 4000;
+const PLAYER_BASE_SPEED = 4.5;
+const GAME_SPEED_MIN = 0.52; // starting speed (tier 0) — gentle intro
+const GAME_SPEED_MAX = 0.87; // final speed at last tier
+function getGameSpeed(){
+  if(!player) return GAME_SPEED_MIN;
+  const t = player.tier / (TIERS.length - 1); // 0 → 1
+  return GAME_SPEED_MIN + (GAME_SPEED_MAX - GAME_SPEED_MIN) * t;
+}
+
+// ── AUDIO ENGINE ──
+let audioCtx = null;
+function ensureAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+let sfxVolume = 0.35;
+let soundEnabled = localStorage.getItem('deepfeed-sound') !== 'off';
+
+// Funny eat: cartoonish "boing-nom" — fast pitch sweep with wobble
+function sfxEat(){
+  const ac = ensureAudio();
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.type = 'square';
+  const t = ac.currentTime;
+  // Upward boing
+  osc.frequency.setValueAtTime(180, t);
+  osc.frequency.exponentialRampToValueAtTime(900, t + 0.06);
+  osc.frequency.exponentialRampToValueAtTime(350, t + 0.1);
+  osc.frequency.exponentialRampToValueAtTime(600, t + 0.14);
+  osc.frequency.exponentialRampToValueAtTime(200, t + 0.2);
+  gain.gain.setValueAtTime(sfxVolume * 0.6, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+  osc.start(t); osc.stop(t + 0.22);
+  // Add a little "pop" noise layer
+  const pop = ac.createOscillator();
+  const popG = ac.createGain();
+  pop.connect(popG); popG.connect(ac.destination);
+  pop.type = 'sine';
+  pop.frequency.setValueAtTime(1200, t);
+  pop.frequency.exponentialRampToValueAtTime(300, t + 0.08);
+  popG.gain.setValueAtTime(sfxVolume * 0.3, t);
+  popG.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  pop.start(t); pop.stop(t + 0.08);
+}
+
+// Funny death: sad trombone "wah wah wah wahhh"
+function sfxDeath(){
+  const ac = ensureAudio();
+  const notes = [310, 293, 277, 185]; // descending sad notes
+  const durations = [0.28, 0.28, 0.28, 0.55];
+  let offset = 0;
+  notes.forEach((freq, i) => {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = 'sawtooth';
+    const t = ac.currentTime + offset;
+    // Wobble vibrato on last note
+    if(i === notes.length - 1){
+      osc.frequency.setValueAtTime(freq, t);
+      const lfo = ac.createOscillator();
+      const lfoGain = ac.createGain();
+      lfo.frequency.value = 6;
+      lfoGain.gain.value = 15;
+      lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+      lfo.start(t); lfo.stop(t + durations[i]);
+    } else {
+      osc.frequency.setValueAtTime(freq, t);
+    }
+    gain.gain.setValueAtTime(sfxVolume * 0.45, t);
+    gain.gain.setValueAtTime(sfxVolume * 0.45, t + durations[i]*0.7);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + durations[i]);
+    osc.start(t); osc.stop(t + durations[i] + 0.01);
+    offset += durations[i];
+  });
+}
+
+// Level up: ascending sparkly chime arpeggio
+function sfxLevelUp(){
+  const ac = ensureAudio();
+  const freqs = [523, 659, 784, 1047]; // C5, E5, G5, C6
+  freqs.forEach((freq, i) => {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = 'sine';
+    const t = ac.currentTime + i * 0.09;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(sfxVolume * 0.4, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    osc.start(t); osc.stop(t + 0.36);
+    // Harmonic shimmer
+    const h = ac.createOscillator();
+    const hG = ac.createGain();
+    h.connect(hG); hG.connect(ac.destination);
+    h.type = 'sine';
+    h.frequency.setValueAtTime(freq * 2, t);
+    hG.gain.setValueAtTime(sfxVolume * 0.12, t);
+    hG.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    h.start(t); h.stop(t + 0.26);
+  });
+}
+
+// Boost pickup: shimmery rising sparkle
+function sfxBoost(){
+  const ac = ensureAudio();
+  for(let i=0;i<6;i++){
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = 'sine';
+    const t = ac.currentTime + i*0.04;
+    osc.frequency.setValueAtTime(800 + i*200, t);
+    gain.gain.setValueAtTime(sfxVolume * 0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.start(t); osc.stop(t + 0.21);
+  }
+}
+
+// Win fanfare: triumphant major chord arpeggio
+function sfxWin(){
+  const ac = ensureAudio();
+  const melody = [523, 659, 784, 1047, 1319, 1568, 2093];
+  melody.forEach((freq, i) => {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = i < 4 ? 'sine' : 'triangle';
+    const t = ac.currentTime + i * 0.12;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(sfxVolume * 0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    osc.start(t); osc.stop(t + 0.51);
+  });
+}
+
+// Combo escalating blip (pitch rises with combo count)
+function sfxCombo(count){
+  const ac = ensureAudio();
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.type = 'triangle';
+  const t = ac.currentTime;
+  const baseFreq = 400 + Math.min(count, 5) * 120;
+  osc.frequency.setValueAtTime(baseFreq, t);
+  osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.08);
+  gain.gain.setValueAtTime(sfxVolume * 0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  osc.start(t); osc.stop(t + 0.12);
+}
+
+// Ambient bubble sounds — periodic soft blips
+let bubbleSfxTimer = 0;
+function sfxBubble(){
+  const ac = ensureAudio();
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  const filter = ac.createBiquadFilter();
+  osc.connect(filter); filter.connect(gain); gain.connect(ac.destination);
+  osc.type = 'sine';
+  filter.type = 'lowpass';
+  filter.frequency.value = 800;
+  const t = ac.currentTime;
+  const freq = 200 + Math.random() * 400;
+  osc.frequency.setValueAtTime(freq, t);
+  osc.frequency.exponentialRampToValueAtTime(freq * 1.8, t + 0.15);
+  gain.gain.setValueAtTime(sfxVolume * 0.06, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  osc.start(t); osc.stop(t + 0.19);
+}
+
+// ── BACKGROUND MUSIC (generative ambient ocean) ──
+let musicPlaying = false;
+let musicNodes = []; // track all active nodes for cleanup
+let musicGain = null; // master music gain node
+const MUSIC_VOL = 0.12;
+let musicScheduler = null;
+
+function startMusic(){
+  if(musicPlaying) return;
+  const ac = ensureAudio();
+  musicPlaying = true;
+  musicNodes = [];
+
+  // Master gain for all music
+  musicGain = ac.createGain();
+  musicGain.gain.value = soundEnabled ? MUSIC_VOL : 0;
+  musicGain.connect(ac.destination);
+
+  // ── Layer 1: Deep ocean drone (two detuned sines + LP filter) ──
+  const droneFilter = ac.createBiquadFilter();
+  droneFilter.type = 'lowpass';
+  droneFilter.frequency.value = 180;
+  droneFilter.Q.value = 2;
+  droneFilter.connect(musicGain);
+
+  const drone1 = ac.createOscillator();
+  const drone1G = ac.createGain();
+  drone1.type = 'sine';
+  drone1.frequency.value = 55; // A1
+  drone1G.gain.value = 0.7;
+  drone1.connect(drone1G); drone1G.connect(droneFilter);
+  drone1.start();
+  musicNodes.push(drone1, drone1G);
+
+  const drone2 = ac.createOscillator();
+  const drone2G = ac.createGain();
+  drone2.type = 'sine';
+  drone2.frequency.value = 55.3; // slightly detuned for warmth
+  drone2G.gain.value = 0.5;
+  drone2.connect(drone2G); drone2G.connect(droneFilter);
+  drone2.start();
+  musicNodes.push(drone2, drone2G, droneFilter);
+
+  // Slow LFO to modulate drone filter cutoff for movement
+  const droneLfo = ac.createOscillator();
+  const droneLfoG = ac.createGain();
+  droneLfo.type = 'sine';
+  droneLfo.frequency.value = 0.06; // very slow
+  droneLfoG.gain.value = 60;
+  droneLfo.connect(droneLfoG); droneLfoG.connect(droneFilter.frequency);
+  droneLfo.start();
+  musicNodes.push(droneLfo, droneLfoG);
+
+  // ── Layer 2: Pad chords (filtered triangle waves, shift every ~8s) ──
+  // Pentatonic-ish ocean chords in Am
+  const chordSets = [
+    [220, 261.6, 329.6],  // Am: A3, C4, E4
+    [196, 246.9, 329.6],  // G/E: G3, B3, E4
+    [174.6, 220, 293.7],  // F: F3, A3, D4
+    [196, 246.9, 293.7],  // G: G3, B3, D4
+  ];
+  let chordIdx = 0;
+  const padOscs = [];
+  const padGains = [];
+  const padFilter = ac.createBiquadFilter();
+  padFilter.type = 'lowpass';
+  padFilter.frequency.value = 500;
+  padFilter.Q.value = 1;
+  padFilter.connect(musicGain);
+  musicNodes.push(padFilter);
+
+  for(let i = 0; i < 3; i++){
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = 'triangle';
+    o.frequency.value = chordSets[0][i];
+    g.gain.value = 0.35;
+    o.connect(g); g.connect(padFilter);
+    o.start();
+    padOscs.push(o);
+    padGains.push(g);
+    musicNodes.push(o, g);
+  }
+
+  // Pad LFO for gentle tremolo
+  const padLfo = ac.createOscillator();
+  const padLfoG = ac.createGain();
+  padLfo.type = 'sine';
+  padLfo.frequency.value = 0.3;
+  padLfoG.gain.value = 0.08;
+  padLfo.connect(padLfoG);
+  for(const g of padGains) padLfoG.connect(g.gain);
+  padLfo.start();
+  musicNodes.push(padLfo, padLfoG);
+
+  // ── Layer 3: Slow pentatonic melody (sine + delay-like effect) ──
+  // A minor pentatonic: A, C, D, E, G across octaves 4-5
+  const melodyNotes = [440, 523.3, 587.3, 659.3, 784, 880, 1047, 784, 659.3, 523.3];
+  let melodyIdx = 0;
+
+  // Schedule chord changes + melody notes
+  function scheduleMusic(){
+    if(!musicPlaying) return;
+    const ac2 = ensureAudio();
+    const t = ac2.currentTime;
+
+    // Shift chord every call (every ~6-8s)
+    chordIdx = (chordIdx + 1) % chordSets.length;
+    const chord = chordSets[chordIdx];
+    for(let i = 0; i < 3; i++){
+      padOscs[i].frequency.linearRampToValueAtTime(chord[i], t + 3);
+    }
+
+    // Play 2-4 melody notes spread across the interval
+    const noteCount = 2 + Math.floor(Math.random() * 3);
+    for(let n = 0; n < noteCount; n++){
+      const noteTime = t + n * rnd(1.4, 2.2);
+      // Pick a note — mostly sequential with occasional skips
+      if(Math.random() < 0.3) melodyIdx = Math.floor(Math.random() * melodyNotes.length);
+      else melodyIdx = (melodyIdx + 1) % melodyNotes.length;
+
+      const freq = melodyNotes[melodyIdx];
+      const dur = rnd(1.2, 2.5);
+
+      // Main tone
+      const mo = ac2.createOscillator();
+      const mg = ac2.createGain();
+      const mf = ac2.createBiquadFilter();
+      mo.type = 'sine';
+      mo.frequency.setValueAtTime(freq, noteTime);
+      mf.type = 'lowpass';
+      mf.frequency.value = 1200;
+      mg.gain.setValueAtTime(0, noteTime);
+      mg.gain.linearRampToValueAtTime(0.3, noteTime + 0.3);
+      mg.gain.setValueAtTime(0.3, noteTime + dur * 0.6);
+      mg.gain.linearRampToValueAtTime(0.001, noteTime + dur);
+      mo.connect(mf); mf.connect(mg); mg.connect(musicGain);
+      mo.start(noteTime); mo.stop(noteTime + dur + 0.05);
+
+      // Ghost echo (octave up, quieter, delayed)
+      const eo = ac2.createOscillator();
+      const eg = ac2.createGain();
+      eo.type = 'sine';
+      eo.frequency.setValueAtTime(freq * 2, noteTime + 0.15);
+      eg.gain.setValueAtTime(0, noteTime + 0.15);
+      eg.gain.linearRampToValueAtTime(0.08, noteTime + 0.4);
+      eg.gain.linearRampToValueAtTime(0.001, noteTime + dur * 0.8);
+      eo.connect(eg); eg.connect(musicGain);
+      eo.start(noteTime + 0.15); eo.stop(noteTime + dur + 0.05);
+    }
+
+    // Schedule next chord change
+    musicScheduler = setTimeout(scheduleMusic, rnd(6000, 8500));
+  }
+
+  // Fade in
+  musicGain.gain.setValueAtTime(0, ac.currentTime);
+  musicGain.gain.linearRampToValueAtTime(MUSIC_VOL, ac.currentTime + 2);
+
+  // Start scheduling
+  scheduleMusic();
+}
+
+function stopMusic(){
+  musicPlaying = false;
+  if(musicScheduler){ clearTimeout(musicScheduler); musicScheduler = null; }
+  // Fade out and stop all nodes
+  if(musicGain && audioCtx){
+    const t = audioCtx.currentTime;
+    musicGain.gain.linearRampToValueAtTime(0.001, t + 0.5);
+    setTimeout(() => {
+      for(const n of musicNodes){
+        try { n.stop(); } catch(e){}
+        try { n.disconnect(); } catch(e){}
+      }
+      musicNodes = [];
+      if(musicGain){ try{ musicGain.disconnect(); }catch(e){} musicGain = null; }
+    }, 600);
+  }
+}
+
+function pauseMusic(){
+  if(musicGain && audioCtx){
+    musicGain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+  }
+  if(musicScheduler){ clearTimeout(musicScheduler); musicScheduler = null; }
+}
+
+function resumeMusic(){
+  if(musicGain && audioCtx){
+    musicGain.gain.linearRampToValueAtTime(MUSIC_VOL, audioCtx.currentTime + 0.5);
+  }
+  // Re-start scheduling if music was playing
+  if(musicPlaying && !musicScheduler){
+    musicScheduler = setTimeout(function schedLoop(){
+      if(!musicPlaying) return;
+      // same logic as scheduleMusic but we call it fresh
+    }, 1000);
+    // Actually just restart the scheduler properly
+    clearTimeout(musicScheduler);
+    musicScheduler = setTimeout(function(){
+      if(!musicPlaying) return;
+      startMusic_reschedule();
+    }, 1000);
+  }
+}
+
+// Helper to reschedule ongoing music without re-creating nodes
+function startMusic_reschedule(){
+  if(!musicPlaying || !audioCtx) return;
+  // The melody/chord scheduling — simplified re-entry
+  const chordSets = [
+    [220, 261.6, 329.6], [196, 246.9, 329.6],
+    [174.6, 220, 293.7], [196, 246.9, 293.7],
+  ];
+  const melodyNotes = [440, 523.3, 587.3, 659.3, 784, 880, 1047, 784, 659.3, 523.3];
+  let ci = Math.floor(Math.random()*chordSets.length);
+  let mi = Math.floor(Math.random()*melodyNotes.length);
+
+  function tick(){
+    if(!musicPlaying) return;
+    const ac = ensureAudio();
+    const t = ac.currentTime;
+    // Melody notes
+    const noteCount = 2 + Math.floor(Math.random()*3);
+    for(let n=0;n<noteCount;n++){
+      const nt = t + n*rnd(1.4,2.2);
+      if(Math.random()<0.3) mi = Math.floor(Math.random()*melodyNotes.length);
+      else mi = (mi+1)%melodyNotes.length;
+      const freq = melodyNotes[mi], dur = rnd(1.2,2.5);
+      const o = ac.createOscillator(), g = ac.createGain();
+      const f = ac.createBiquadFilter();
+      o.type='sine'; o.frequency.setValueAtTime(freq,nt);
+      f.type='lowpass'; f.frequency.value=1200;
+      g.gain.setValueAtTime(0,nt);
+      g.gain.linearRampToValueAtTime(0.3,nt+0.3);
+      g.gain.setValueAtTime(0.3,nt+dur*0.6);
+      g.gain.linearRampToValueAtTime(0.001,nt+dur);
+      o.connect(f); f.connect(g); g.connect(musicGain);
+      o.start(nt); o.stop(nt+dur+0.05);
+    }
+    musicScheduler = setTimeout(tick, rnd(6000,8500));
+  }
+  tick();
+}
+
+// ── CANVAS SETUP ──
+const cvs = document.getElementById('game');
+const ctx = cvs.getContext('2d');
+let W, H;
+function resize() { W = cvs.width = innerWidth; H = cvs.height = innerHeight; }
+resize(); addEventListener('resize', resize);
+
+// ── STATE ──
+let player, npcs, bubbles, rays, shrimps, chests;
+let particles = [];
+let playerTrail = [];
+let camera = {x:0, y:0};
+let score = 0, gameOver = false, gameWon = false, gameStarted = false, paused = false;
+let boostTimer = 0;
+let screenFlash = 0, screenFlashColor = '#fff';
+let selectedBiome = 0;
+let currentBiome = 0;
+let biomeFlash = 0, biomeFlashName = '';
+let unlockedBiomes = parseInt(localStorage.getItem('deepfeed-biomes')) || 1;
+let comboCount = 0, comboTimer = 0;
+const COMBO_WINDOW = 2000; // ms to chain eats
+let mouseX = W/2, mouseY = H/2;
+let controlMode = 'mouse'; // 'mouse' | 'wasd' | 'arrows' | 'touch'
+let keys = {};
+// Touch joystick state
+let touchActive = false;
+let touchJoyX = 0, touchJoyY = 0; // -1 to 1 normalized
+// Stats tracking
+let gameStartTime = 0, totalFishEaten = 0, maxCombo = 0, timeSurvived = 0;
+// High score (localStorage)
+let highScore = parseInt(localStorage.getItem('deepfeed-highscore')) || 0;
+// Chest config
+const CHEST_COUNT = 5;
+const CHEST_RESPAWN_TIME = 15000; // ms
+let chestRespawnTimer = 0;
+
+// ── TUTORIAL SYSTEM ──
+let tutorialActive = true;     // active during tier 0
+let tutorialFishEaten = 0;     // dismiss after eating a few
+const TUTORIAL_DISMISS_EATS = 4; // auto-dismiss after this many eats
+let tutorialFadeOut = 0;       // fade-out animation (1 → 0)
+let tutorialStep = 0;          // 0 = move hint, 1 = eat/avoid hint, 2 = progress hint
+let tutorialStepTimer = 0;     // time on current step
+
+// ── INPUT ──
+addEventListener('mousemove', e => {
+  if(controlMode === 'mouse'){ mouseX = e.clientX; mouseY = e.clientY; }
+});
+addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if(e.key === 'Escape' && gameStarted && !gameOver && !gameWon){
+    paused = !paused;
+    if(paused){
+      overlayTitle.textContent = 'Paused';
+      overlayMsg.textContent = 'Press Escape to resume';
+      document.getElementById('restart-btn').style.display = 'none';
+      document.getElementById('home-section').style.display = '';
+      overlay.classList.remove('hidden');
+      pauseMusic();
+    } else {
+      document.getElementById('restart-btn').style.display = '';
+      document.getElementById('home-section').style.display = 'none';
+      overlay.classList.add('hidden');
+      resumeMusic();
+    }
+  }
+});
+addEventListener('keyup', e => { keys[e.key] = false; });
+
+// ── DOM REFS ──
+const hudTier = document.getElementById('tier-name');
+const hudBar = document.getElementById('level-bar');
+const hudBarText = document.getElementById('level-text');
+const hudScore = document.getElementById('score');
+const hudBoost = document.getElementById('boost-indicator');
+const overlay = document.getElementById('overlay');
+const overlayTitle = document.getElementById('overlay-title');
+const overlayMsg = document.getElementById('overlay-msg');
+const startScreen = document.getElementById('start-screen');
+document.getElementById('restart-btn').onclick = () => { initGame(); startMusic(); if(controlMode === 'touch'){ showTouchControls(true); pauseBtn.style.display = 'block'; } };
+document.getElementById('home-btn').onclick = () => {
+  // Return to start screen, stop everything
+  stopMusic();
+  gameOver = false; gameWon = false; paused = false; gameStarted = false;
+  overlay.classList.add('hidden');
+  document.getElementById('home-section').style.display = 'none';
+  document.getElementById('game').classList.remove('hide-cursor');
+  showTouchControls(false);
+  pauseBtn.style.display = 'none';
+  startScreen.classList.remove('hidden');
+  updateBiomeButtons();
+};
+// Control selection buttons
+document.querySelectorAll('.ctrl-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    controlMode = btn.dataset.ctrl;
+  };
+});
+// Biome selection buttons
+document.querySelectorAll('.biome-btn').forEach(btn => {
+  btn.onclick = () => {
+    const biomeIdx = parseInt(btn.dataset.biome);
+    if(biomeIdx >= unlockedBiomes) return;
+    document.querySelectorAll('.biome-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedBiome = biomeIdx;
+  };
+});
+function updateBiomeButtons(){
+  document.querySelectorAll('.biome-btn').forEach(btn => {
+    const biomeIdx = parseInt(btn.dataset.biome);
+    if(biomeIdx < unlockedBiomes){
+      btn.classList.remove('locked');
+      btn.textContent = BIOMES[biomeIdx].name;
+      const sub = document.createElement('span');
+      sub.className = 'ctrl-keys';
+      sub.textContent = BIOMES[biomeIdx].creatureType.charAt(0).toUpperCase() + BIOMES[biomeIdx].creatureType.slice(1);
+      btn.appendChild(sub);
+    } else {
+      btn.classList.add('locked');
+      btn.textContent = '\u{1F512} ' + BIOMES[biomeIdx].name;
+      const sub = document.createElement('span');
+      sub.className = 'ctrl-keys';
+      sub.textContent = BIOMES[biomeIdx].creatureType.charAt(0).toUpperCase() + BIOMES[biomeIdx].creatureType.slice(1);
+      btn.appendChild(sub);
+    }
+    if(biomeIdx === selectedBiome && biomeIdx < unlockedBiomes) btn.classList.add('selected');
+    else btn.classList.remove('selected');
+  });
+}
+updateBiomeButtons();
+
+// ── SOUND TOGGLE ──
+const soundToggleBtn = document.getElementById('sound-toggle');
+function applySoundState(){
+  if(soundEnabled){
+    sfxVolume = 0.35;
+    if(musicGain) musicGain.gain.value = MUSIC_VOL;
+    soundToggleBtn.innerHTML = '&#x1f50a;';
+    soundToggleBtn.classList.remove('muted');
+  } else {
+    sfxVolume = 0;
+    if(musicGain) musicGain.gain.value = 0;
+    soundToggleBtn.innerHTML = '&#x1f507;';
+    soundToggleBtn.classList.add('muted');
+  }
+  localStorage.setItem('deepfeed-sound', soundEnabled ? 'on' : 'off');
+}
+applySoundState();
+soundToggleBtn.onclick = (e) => {
+  e.stopPropagation();
+  soundEnabled = !soundEnabled;
+  applySoundState();
+};
+
+// ── TOUCH JOYSTICK ──
+const touchZone = document.getElementById('touch-zone');
+const joystickKnob = document.getElementById('joystick-knob');
+const joystickBase = document.getElementById('joystick-base');
+let touchId = null;
+let joyBaseRect = null;
+
+function showTouchControls(show){
+  touchZone.style.display = show ? 'block' : 'none';
+}
+
+function updateJoystickKnob(){
+  const maxPx = 40;
+  const dx = touchJoyX * maxPx;
+  const dy = touchJoyY * maxPx;
+  joystickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+}
+
+touchZone.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if(touchId !== null) return;
+  const t = e.changedTouches[0];
+  touchId = t.identifier;
+  joyBaseRect = joystickBase.getBoundingClientRect();
+  touchActive = true;
+  handleJoystickMove(t);
+}, {passive:false});
+
+touchZone.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  for(let i=0; i<e.changedTouches.length; i++){
+    if(e.changedTouches[i].identifier === touchId){
+      handleJoystickMove(e.changedTouches[i]);
+      break;
+    }
+  }
+}, {passive:false});
+
+function handleTouchEnd(e){
+  for(let i=0; i<e.changedTouches.length; i++){
+    if(e.changedTouches[i].identifier === touchId){
+      touchId = null;
+      touchActive = false;
+      touchJoyX = 0;
+      touchJoyY = 0;
+      updateJoystickKnob();
+      break;
+    }
+  }
+}
+touchZone.addEventListener('touchend', handleTouchEnd);
+touchZone.addEventListener('touchcancel', handleTouchEnd);
+
+function handleJoystickMove(touch){
+  if(!joyBaseRect) return;
+  const cx = joyBaseRect.left + joyBaseRect.width / 2;
+  const cy = joyBaseRect.top + joyBaseRect.height / 2;
+  const maxR = joyBaseRect.width / 2;
+  let dx = touch.clientX - cx;
+  let dy = touch.clientY - cy;
+  const d = Math.hypot(dx, dy);
+  if(d > maxR){ dx = dx/d * maxR; dy = dy/d * maxR; }
+  touchJoyX = dx / maxR;
+  touchJoyY = dy / maxR;
+  updateJoystickKnob();
+}
+
+// Auto-detect mobile and default to touch controls
+const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+if(isTouchDevice){
+  document.querySelectorAll('.ctrl-btn').forEach(b => b.classList.remove('selected'));
+  const touchBtn = document.querySelector('.ctrl-btn[data-ctrl="touch"]');
+  if(touchBtn) touchBtn.classList.add('selected');
+  controlMode = 'touch';
+}
+
+// ── MOBILE PAUSE BUTTON ──
+const pauseBtn = document.getElementById('pause-btn');
+pauseBtn.onclick = (e) => {
+  e.stopPropagation();
+  if(!gameStarted || gameOver || gameWon) return;
+  paused = !paused;
+  if(paused){
+    overlayTitle.textContent = 'Paused';
+    overlayMsg.textContent = 'Tap the pause button to resume';
+    document.getElementById('restart-btn').style.display = 'none';
+    document.getElementById('home-section').style.display = '';
+    overlay.classList.remove('hidden');
+    pauseMusic();
+  } else {
+    document.getElementById('restart-btn').style.display = '';
+    document.getElementById('home-section').style.display = 'none';
+    overlay.classList.add('hidden');
+    resumeMusic();
+  }
+};
+
+document.getElementById('start-btn').onclick = () => {
+  ensureAudio();
+  startScreen.classList.add('hidden');
+  gameStarted = true;
+  if(controlMode === 'mouse') document.getElementById('game').classList.add('hide-cursor');
+  else document.getElementById('game').classList.remove('hide-cursor');
+  if(controlMode === 'touch') showTouchControls(true);
+  else showTouchControls(false);
+  if(controlMode === 'touch') pauseBtn.style.display = 'block';
+  else pauseBtn.style.display = 'none';
+  initGame();
+  startMusic();
+};
+
+// ── HELPERS ──
+function rnd(a,b){ return a + Math.random()*(b-a); }
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+function tierFor(size){ for(let i=TIERS.length-1;i>=0;i--) if(size>=TIERS[i].size) return i; return 0; }
+
+// ── PARTICLES ──
+function spawnEatParticles(x, y, color, count){
+  for(let i=0;i<count;i++){
+    const ang = Math.random()*Math.PI*2;
+    const spd = rnd(1.5, 4);
+    particles.push({
+      x, y, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
+      life: 1, decay: rnd(0.015, 0.035), r: rnd(2, 5), color
+    });
+  }
+}
+
+function spawnLevelUpRing(x, y, size, color){
+  for(let i=0;i<20;i++){
+    const ang = (i/20)*Math.PI*2;
+    const spd = rnd(2.5, 5);
+    particles.push({
+      x, y, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
+      life: 1, decay: rnd(0.01, 0.025), r: rnd(3, 7), color
+    });
+  }
+}
+
+// ── FLOATING TEXT ──
+let floatingTexts = [];
+function spawnFloatingText(x, y, text, color, big){
+  floatingTexts.push({ x, y, text, color, life: 1, decay: 0.015, big: !!big });
+}
+
+// ── ENTITY FACTORIES ──
+function createPlayer(){
+  return {
+    x: WORLD_W/2, y: WORLD_H/2,
+    tier: 0, xp: 0, size: TIERS[0].size + 3,
+    vx:0, vy:0, facing:1, tailPhase:0,
+    targetX: WORLD_W/2, targetY: WORLD_H/2
+  };
+}
+
+function createNPC(avoidPlayer, avoidDist){
+  // Bias spawns: 50% near/below player tier, 25% slightly above, 25% any (skewed small)
+  let tier;
+  const pTier = player ? player.tier : 0;
+  const r = Math.random();
+  if(r < 0.50){
+    tier = Math.floor(Math.random() * Math.max(1, pTier + 1));
+  } else if(r < 0.75){
+    tier = pTier + 1 + Math.floor(Math.random() * 2);
+  } else {
+    // Skew toward smaller tiers — use pow(1.3) so huge fish are rarer
+    tier = Math.floor(Math.pow(Math.random(), 1.3) * TIERS.length);
+  }
+  tier = clamp(tier, 0, TIERS.length - 1);
+  let x, y;
+  // Dangerous fish (larger than player) always spawn far away
+  let minDist = avoidDist || (avoidPlayer ? 400 : 0);
+  if(player && TIERS[tier].size > player.size){
+    minDist = Math.max(minDist, 600 + tier * 30);
+  }
+  if(minDist > 0 && player){
+    do { x = rnd(100,WORLD_W-100); y = rnd(100,WORLD_H-100); }
+    while(Math.hypot(x-player.x, y-player.y) < minDist);
+  } else { x = rnd(100,WORLD_W-100); y = rnd(100,WORLD_H-100); }
+  const spd = rnd(0.6, 2.2) * (1 - tier/TIERS.length*0.4 + 0.3);
+  const dir = Math.random() * Math.PI * 2;
+  const npcTypes = BIOMES[selectedBiome].npcCreatureTypes;
+  const creatureType = npcTypes[Math.floor(Math.random() * npcTypes.length)];
+  return {
+    x, y, tier, size: TIERS[tier].size,
+    vx: Math.cos(dir)*spd, vy: Math.sin(dir)*spd,
+    facing: Math.cos(dir)>0?1:-1,
+    tailPhase: Math.random()*Math.PI*2,
+    chasing: false, turnTimer: rnd(2000,6000),
+    alive: true,
+    creatureType,
+    schoolId: (tier <= 3 && Math.random() < 0.5) ? Math.floor(rnd(0, 8)) : -1
+  };
+}
+
+function createBubble(){
+  return { x: rnd(0,WORLD_W), y: rnd(0,WORLD_H), r: rnd(1.5,5), speed: rnd(0.3,1.2), wobble: rnd(0,Math.PI*2), opacity: rnd(0.15,0.45) };
+}
+
+function createRay(){
+  return { x: rnd(-200,WORLD_W+200), width: rnd(60,200), opacity: rnd(0.02,0.06), speed: rnd(0.05,0.15), drift: rnd(-0.3,0.3) };
+}
+
+function createShrimp(){
+  const side = Math.random()<0.5 ? 0 : 1;
+  return {
+    x: side===0 ? -30 : WORLD_W+30,
+    y: rnd(200,WORLD_H-200),
+    vx: side===0 ? rnd(1.5,2.5) : rnd(-2.5,-1.5),
+    vy: rnd(-0.3,0.3),
+    size: 10, sparkle: 0, alive: true
+  };
+}
+
+function createChest(){
+  return {
+    x: rnd(200, WORLD_W-200),
+    y: WORLD_H - rnd(70, 110), // on the seafloor
+    opened: false,
+    shimmer: Math.random()*Math.PI*2,
+    size: 18
+  };
+}
+
+// Chest open sound
+function sfxChestOpen(){
+  const ac = ensureAudio();
+  // Rising sparkle sequence
+  const notes = [330, 440, 554, 659, 880];
+  notes.forEach((freq, i) => {
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = 'triangle';
+    const t = ac.currentTime + i*0.06;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(sfxVolume * 0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.start(t); osc.stop(t + 0.21);
+  });
+}
+
+// ── INIT ──
+function initGame(){
+  overlay.classList.add('hidden');
+  gameOver = false; gameWon = false; paused = false; score = 0; boostTimer = 0;
+  screenFlash = 0; particles = []; playerTrail = [];
+  currentBiome = selectedBiome; biomeFlash = 0;
+  comboCount = 0; comboTimer = 0; floatingTexts = [];
+  totalFishEaten = 0; maxCombo = 0; gameStartTime = performance.now(); timeSurvived = 0;
+  chestRespawnTimer = 0;
+  tutorialActive = true; tutorialFishEaten = 0; tutorialFadeOut = 0;
+  tutorialStep = 0; tutorialStepTimer = 0;
+  player = createPlayer();
+  npcs = [];
+  for(let i=0;i<NPC_COUNT;i++){
+    const n = createNPC(false);
+    // At game start, push dangerous fish far from the player so you don't spawn surrounded
+    if(n.size > player.size){
+      const safeDist = 700 + n.tier * 40; // bigger fish = farther away
+      while(Math.hypot(n.x - player.x, n.y - player.y) < safeDist){
+        n.x = rnd(100, WORLD_W-100);
+        n.y = rnd(100, WORLD_H-100);
+      }
+    }
+    npcs.push(n);
+  }
+  bubbles = []; for(let i=0;i<BUBBLE_COUNT;i++) bubbles.push(createBubble());
+  rays = []; for(let i=0;i<RAY_COUNT;i++) rays.push(createRay());
+  shrimps = [];
+  chests = []; for(let i=0;i<CHEST_COUNT;i++) chests.push(createChest());
+  lastShrimp = performance.now();
+  updateHUD();
+}
+
+let lastShrimp = 0;
+
+// ── UPDATE ──
+function update(dt){
+  if(!gameStarted || gameOver || gameWon || paused) return;
+  const now = performance.now();
+
+  // Player movement
+  const speedMul = 1;
+  const spd = PLAYER_BASE_SPEED * speedMul * (1 + player.tier*0.12);
+  if(controlMode === 'wasd' || controlMode === 'arrows' || controlMode === 'touch'){
+    let dx=0, dy=0;
+    if(controlMode === 'wasd'){
+      if(keys['a']||keys['A']) dx=-1;
+      if(keys['d']||keys['D']) dx=1;
+      if(keys['w']||keys['W']) dy=-1;
+      if(keys['s']||keys['S']) dy=1;
+    } else if(controlMode === 'arrows'){
+      if(keys['ArrowLeft']) dx=-1;
+      if(keys['ArrowRight']) dx=1;
+      if(keys['ArrowUp']) dy=-1;
+      if(keys['ArrowDown']) dy=1;
+    } else if(controlMode === 'touch'){
+      dx = touchJoyX;
+      dy = touchJoyY;
+    }
+    const mag = Math.hypot(dx,dy)||1;
+    player.vx = lerp(player.vx, dx/mag*spd, 0.12);
+    player.vy = lerp(player.vy, dy/mag*spd, 0.12);
+  } else {
+    const wx = camera.x + mouseX;
+    const wy = camera.y + mouseY;
+    player.targetX = wx; player.targetY = wy;
+    let dx = wx - player.x, dy = wy - player.y;
+    const d = Math.hypot(dx,dy);
+    if(d > 5){
+      const s = Math.min(spd, d*0.08);
+      player.vx = lerp(player.vx, dx/d*s, 0.15);
+      player.vy = lerp(player.vy, dy/d*s, 0.15);
+    } else { player.vx*=0.9; player.vy*=0.9; }
+  }
+  player.x += player.vx; player.y += player.vy;
+  player.x = clamp(player.x, player.size, WORLD_W-player.size);
+  player.y = clamp(player.y, player.size, WORLD_H-player.size);
+  if(Math.abs(player.vx)>0.2) player.facing = player.vx>0?1:-1;
+  player.tailPhase += dt*0.008;
+
+  // Update time survived
+  timeSurvived = performance.now() - gameStartTime;
+
+  // Player bubble trail
+  const pSpeed = Math.hypot(player.vx, player.vy);
+  if(pSpeed > 0.5){
+    // Spawn trail bubble at tail position
+    const tailX = player.x - player.facing * player.size * 0.5;
+    const tailY = player.y + rnd(-player.size*0.15, player.size*0.15);
+    playerTrail.push({
+      x: tailX, y: tailY,
+      r: rnd(1.5, 3 + player.tier*0.2),
+      life: 1, decay: rnd(0.012, 0.025),
+      vy: -rnd(0.2, 0.6), vx: rnd(-0.2, 0.2)
+    });
+    // Limit trail length
+    if(playerTrail.length > 40) playerTrail.shift();
+  }
+  // Update trail
+  for(let i=playerTrail.length-1;i>=0;i--){
+    const tb = playerTrail[i];
+    tb.x += tb.vx; tb.y += tb.vy;
+    tb.life -= tb.decay;
+    if(tb.life <= 0) playerTrail.splice(i, 1);
+  }
+
+  // Boost timer (freeze)
+  if(boostTimer > 0){
+    boostTimer -= dt;
+    document.getElementById('freeze-bar').style.width = (boostTimer / BOOST_DURATION * 100) + '%';
+    if(boostTimer <= 0){ boostTimer = 0; hudBoost.classList.add('hidden'); }
+  }
+
+  // NPC update (skip movement when frozen)
+  const frozen = boostTimer > 0;
+  if(!frozen){
+  for(let n of npcs){
+    if(!n.alive) continue;
+    // Chase logic: larger NPC near player chases (aggression scales with player tier)
+    const dToPlayer = dist(n, player);
+    // Early game: predators are much less aggressive (shorter range, slower turning)
+    const earlyDampen = Math.min(player.tier / 4, 1); // 0 at tier 0, ramps to 1 by tier 4
+    const chaseRange = 200 + earlyDampen * 150 + player.tier * 20;
+    if(n.size > player.size && dToPlayer < chaseRange && dToPlayer > n.size){
+      n.chasing = true;
+      const chaseSpd = (1.2 + earlyDampen * 0.6) + n.tier*0.08 + player.tier*0.04;
+      const chaseTurn = 0.02 + earlyDampen * 0.02 + player.tier*0.004;
+      const dx = player.x-n.x, dy = player.y-n.y;
+      const d = Math.hypot(dx,dy)||1;
+      n.vx = lerp(n.vx, dx/d*chaseSpd, chaseTurn);
+      n.vy = lerp(n.vy, dy/d*chaseSpd, chaseTurn);
+    } else {
+      n.chasing = false;
+      n.turnTimer -= dt;
+      if(n.turnTimer <= 0){
+        const ang = Math.random()*Math.PI*2;
+        const sp = rnd(0.6,2.2)*(1-n.tier/TIERS.length*0.3+0.3);
+        n.vx = Math.cos(ang)*sp; n.vy = Math.sin(ang)*sp;
+        n.turnTimer = rnd(2000,6000);
+      }
+    }
+    n.x += n.vx; n.y += n.vy;
+    // Bounce off walls
+    if(n.x < 50){ n.x=50; n.vx=Math.abs(n.vx); }
+    if(n.x > WORLD_W-50){ n.x=WORLD_W-50; n.vx=-Math.abs(n.vx); }
+    if(n.y < 50){ n.y=50; n.vy=Math.abs(n.vy); }
+    if(n.y > WORLD_H-50){ n.y=WORLD_H-50; n.vy=-Math.abs(n.vy); }
+    if(Math.abs(n.vx)>0.15) n.facing = n.vx>0?1:-1;
+    n.tailPhase += dt*0.007;
+  }
+
+  // Schooling: fish with same schoolId + tier steer toward each other
+  for(let i=0;i<npcs.length;i++){
+    const a = npcs[i];
+    if(!a.alive || a.schoolId < 0 || a.chasing) continue;
+    let cx=0, cy=0, count=0;
+    for(let j=0;j<npcs.length;j++){
+      if(i===j) continue;
+      const b = npcs[j];
+      if(!b.alive || b.schoolId !== a.schoolId || b.tier !== a.tier) continue;
+      const d = Math.hypot(a.x-b.x, a.y-b.y);
+      if(d < 250){ cx += b.x; cy += b.y; count++; }
+    }
+    if(count > 0){
+      cx /= count; cy /= count;
+      const dx = cx - a.x, dy = cy - a.y;
+      const d = Math.hypot(dx,dy) || 1;
+      // Gentle pull toward school center
+      a.vx = lerp(a.vx, a.vx + dx/d*0.3, 0.05);
+      a.vy = lerp(a.vy, a.vy + dy/d*0.3, 0.05);
+    }
+  }
+  } // end if(!frozen)
+
+  // Collision: player vs NPC
+  for(let i=npcs.length-1;i>=0;i--){
+    const n = npcs[i]; if(!n.alive) continue;
+    const d = dist(player, n);
+    const touchDist = (player.size + n.size)*0.45;
+    if(d < touchDist){
+      if(player.size > n.size){
+        // Eat it — spawn particles + funny sound
+        spawnEatParticles(n.x, n.y, TIERS[n.tier].color, 8 + n.tier*2);
+        n.alive = false;
+        // Combo system
+        comboCount = comboTimer > 0 ? comboCount + 1 : 1;
+        comboTimer = COMBO_WINDOW;
+        if(comboCount > maxCombo) maxCombo = comboCount;
+        if(comboCount > 1) sfxCombo(comboCount); else sfxEat();
+        totalFishEaten++;
+        // Tutorial: count eats during tier 0
+        if(tutorialActive){
+          tutorialFishEaten++;
+          if(tutorialFishEaten >= TUTORIAL_DISMISS_EATS){ tutorialActive = false; tutorialFadeOut = 1; }
+        }
+        const comboMul = Math.min(comboCount, 10);
+        const pts = Math.ceil(TIERS[n.tier].size) * comboMul;
+        score += pts;
+        // Floating score text
+        let txt = '+' + pts;
+        if(comboCount > 1) txt += ' x' + comboMul;
+        const comboWords = {6:'AMAZING',7:'AWESOME',8:'INCREDIBLE',9:'UNSTOPPABLE',10:'LEGENDARY'};
+        if(comboWords[comboCount]) txt += ' ' + comboWords[comboCount];
+        spawnFloatingText(n.x, n.y - n.size*0.5, txt, comboCount >= 6 ? '#ffd700' : comboCount >= 3 ? '#ff9944' : '#fff', comboCount >= 5);
+        // XP: relative-size weighting — fish close to your tier give full XP, tiny fish give less
+        const tierDiff = player.tier - n.tier;
+        let xpGain;
+        if(tierDiff <= 1) xpGain = 1;           // same tier or 1 below = full XP
+        else if(tierDiff <= 3) xpGain = 0.5;    // 2-3 tiers below = half XP
+        else if(tierDiff <= 5) xpGain = 0.25;   // 4-5 tiers below = quarter XP
+        else xpGain = 0;                         // 6+ tiers below = no XP (just score)
+        player.xp += xpGain;
+        if(xpGain === 0){
+          spawnFloatingText(n.x, n.y - n.size*0.5 - 16, 'TOO SMALL', 'rgba(150,150,150,0.7)', false);
+        }
+        const needed = xpForLevel(player.tier);
+        if(player.xp >= needed && player.tier < TIERS.length-1){
+          player.tier++;
+          player.xp = 0;
+          player.size = TIERS[player.tier].size;
+          // Dismiss tutorial on first level-up
+          if(tutorialActive){ tutorialActive = false; tutorialFadeOut = 1; }
+          // Level-up flash + ring
+          screenFlash = 1;
+          screenFlashColor = TIERS[player.tier].color;
+          spawnLevelUpRing(player.x, player.y, player.size, TIERS[player.tier].color);
+          if(player.tier === TIERS.length-1){ sfxWin(); winGame(); return; }
+          sfxLevelUp();
+        }
+        // Replace NPC
+        npcs[i] = createNPC(true);
+        updateHUD();
+      } else if(n.size > player.size && !frozen){
+        sfxDeath(); endGame(); return;
+      }
+    }
+  }
+
+  // Shrimp update
+  if(now - lastShrimp > SHRIMP_INTERVAL){
+    shrimps.push(createShrimp());
+    lastShrimp = now;
+  }
+  for(let i=shrimps.length-1;i>=0;i--){
+    const s = shrimps[i];
+    s.x += s.vx; s.y += s.vy;
+    s.sparkle += dt*0.01;
+    if(s.x < -60 || s.x > WORLD_W+60){ shrimps.splice(i,1); continue; }
+    const d = dist(player, s);
+    if(d < player.size*0.5 + 12){
+      shrimps.splice(i,1);
+      boostTimer = BOOST_DURATION;
+      hudBoost.classList.remove('hidden');
+      document.getElementById('freeze-bar').style.width = '100%';
+      sfxBoost();
+      score += 50;
+      updateHUD();
+    }
+  }
+
+  // Bubbles
+  for(let b of bubbles){
+    b.y -= b.speed;
+    b.wobble += dt*0.002;
+    b.x += Math.sin(b.wobble)*0.3;
+    if(b.y < -10){ b.y = WORLD_H+10; b.x = rnd(0,WORLD_W); }
+  }
+
+  // Treasure chest collision + update
+  for(let i=chests.length-1;i>=0;i--){
+    const c = chests[i];
+    if(c.opened) continue;
+    c.shimmer += dt*0.003;
+    const d = dist(player, c);
+    if(d < player.size*0.5 + c.size){
+      c.opened = true;
+      sfxChestOpen();
+      spawnEatParticles(c.x, c.y, '#ffd700', 12);
+      spawnFloatingText(c.x, c.y - 20, 'FISH RELEASED!', '#ffd700', true);
+      // Release 5-8 small edible fish at the chest location
+      const releaseCount = Math.floor(rnd(5, 9));
+      for(let j=0;j<releaseCount;j++){
+        // Spawn fish 1-2 tiers below player (scales with growth, always edible)
+        const spawnTier = Math.max(0, player.tier - Math.floor(rnd(1, 3)));
+        const ang = Math.random()*Math.PI*2;
+        const spd = rnd(1, 2.5);
+        const fish = {
+          x: c.x + rnd(-20,20), y: c.y + rnd(-30,-10),
+          tier: spawnTier, size: TIERS[spawnTier].size,
+          vx: Math.cos(ang)*spd, vy: -Math.abs(Math.sin(ang)*spd) - 0.5, // burst upward
+          facing: Math.cos(ang)>0?1:-1,
+          tailPhase: Math.random()*Math.PI*2,
+          chasing: false, turnTimer: rnd(2000,6000),
+          alive: true, schoolId: -1,
+          creatureType: BIOMES[selectedBiome].npcCreatureTypes[Math.floor(Math.random() * BIOMES[selectedBiome].npcCreatureTypes.length)]
+        };
+        npcs.push(fish);
+      }
+    }
+  }
+  // Chest respawn
+  const activeChests = chests.filter(c => !c.opened).length;
+  if(activeChests < CHEST_COUNT){
+    chestRespawnTimer += dt;
+    if(chestRespawnTimer >= CHEST_RESPAWN_TIME){
+      chestRespawnTimer = 0;
+      chests.push(createChest());
+    }
+  }
+  // Ambient bubble sfx
+  bubbleSfxTimer -= dt;
+  if(bubbleSfxTimer <= 0){
+    sfxBubble();
+    bubbleSfxTimer = rnd(2500, 6000);
+  }
+
+  // Rays
+  for(let r of rays){
+    r.x += r.drift;
+    r.opacity = 0.03 + Math.sin(performance.now()*0.0003 + r.x*0.001)*0.02;
+    if(r.x < -400) r.x = WORLD_W+200;
+    if(r.x > WORLD_W+400) r.x = -200;
+  }
+
+  // Particles
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.96; p.vy *= 0.96;
+    p.life -= p.decay;
+    if(p.life <= 0) particles.splice(i, 1);
+  }
+
+  // Screen flash decay
+  if(screenFlash > 0) screenFlash = Math.max(0, screenFlash - dt*0.004);
+  if(biomeFlash > 0) biomeFlash = Math.max(0, biomeFlash - dt*0.0008);
+
+  // Combo decay
+  if(comboTimer > 0){
+    comboTimer -= dt;
+    if(comboTimer <= 0){ comboCount = 0; comboTimer = 0; }
+  }
+
+  // Floating texts
+  for(let i=floatingTexts.length-1;i>=0;i--){
+    const ft = floatingTexts[i];
+    ft.y -= 0.8;
+    ft.life -= ft.decay;
+    if(ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+
+  // Tutorial step progression
+  if(tutorialActive){
+    tutorialStepTimer += dt;
+    if(tutorialStep === 0 && tutorialStepTimer > 3000){ tutorialStep = 1; tutorialStepTimer = 0; }
+    else if(tutorialStep === 1 && tutorialStepTimer > 6000){ tutorialStep = 2; tutorialStepTimer = 0; }
+  }
+  if(tutorialFadeOut > 0){ tutorialFadeOut = Math.max(0, tutorialFadeOut - dt * 0.002); }
+
+  // NPC-vs-NPC eating (limited checks per frame for performance, skip when frozen)
+  if(!frozen){
+  let npcEatChecks = 0;
+  for(let i=npcs.length-1;i>=0 && npcEatChecks < 40;i--){
+    const a = npcs[i]; if(!a.alive) continue;
+    for(let j=i-1;j>=0 && npcEatChecks < 40;j--){
+      const b = npcs[j]; if(!b.alive) continue;
+      if(a.tier === b.tier) continue;
+      const d = Math.hypot(a.x-b.x, a.y-b.y);
+      const touchD = (a.size + b.size)*0.4;
+      if(d < touchD){
+        npcEatChecks++;
+        if(a.size > b.size){ b.alive = false; npcs[j] = createNPC(false); }
+        else { a.alive = false; npcs[i] = createNPC(false); break; }
+      }
+    }
+  }
+  } // end if(!frozen) for NPC-vs-NPC
+
+  // Camera
+  camera.x = lerp(camera.x, player.x - W/2, 0.07);
+  camera.y = lerp(camera.y, player.y - H/2, 0.07);
+  camera.x = clamp(camera.x, 0, WORLD_W-W);
+  camera.y = clamp(camera.y, 0, WORLD_H-H);
+}
+
+function updateHUD(){
+  const t = TIERS[player.tier];
+  const needed = xpForLevel(player.tier);
+  hudTier.textContent = t.name + (player.tier>0 ? ' (Lv.'+(player.tier+1)+')' : '');
+  hudTier.style.color = t.color;
+  hudBar.style.width = (player.xp/needed*100)+'%';
+  hudBarText.textContent = Math.floor(player.xp)+' / '+needed;
+  hudScore.innerHTML = 'Score: '+score + '<br><span style="font-size:12px;color:#6a8db8">Best: '+highScore+'</span>';
+}
+
+function endGame(){
+  gameOver = true;
+  timeSurvived = performance.now() - gameStartTime;
+  if(score > highScore){ highScore = score; localStorage.setItem('deepfeed-highscore', highScore); }
+  stopMusic();
+  overlayTitle.textContent = 'Game Over';
+  const secs = Math.floor(timeSurvived/1000);
+  const mins = Math.floor(secs/60);
+  const timeStr = mins > 0 ? mins+'m '+((secs%60))+'s' : secs+'s';
+  overlayMsg.innerHTML = 'Eaten at tier <b>'+TIERS[player.tier].name+'</b>!<br>'+
+    'Score: <b>'+score+'</b>' + (score >= highScore ? ' <span style="color:#ffd700">NEW HIGH SCORE!</span>' : ' &bull; Best: '+highScore) + '<br>'+
+    '<span style="font-size:13px;color:#6a8db8">'+
+    'Time: '+timeStr+' &bull; Fish eaten: '+totalFishEaten+' &bull; Best combo: x'+maxCombo+
+    '</span>';
+  document.getElementById('restart-btn').style.display = '';
+  document.getElementById('home-section').style.display = 'none';
+  overlay.classList.remove('hidden');
+}
+function winGame(){
+  gameWon = true;
+  timeSurvived = performance.now() - gameStartTime;
+  if(score > highScore){ highScore = score; localStorage.setItem('deepfeed-highscore', highScore); }
+  stopMusic();
+  // Unlock next biome if applicable
+  let unlockMsg = '';
+  if(selectedBiome + 1 < BIOMES.length && unlockedBiomes <= selectedBiome + 1){
+    unlockedBiomes = selectedBiome + 2;
+    localStorage.setItem('deepfeed-biomes', unlockedBiomes);
+    unlockMsg = '<br><span style="color:#ffd700;font-size:18px;font-weight:700">' + BIOMES[selectedBiome + 1].name + ' unlocked!</span>';
+  }
+  overlayTitle.textContent = 'Congrats!';
+  const secs = Math.floor(timeSurvived/1000);
+  const mins = Math.floor(secs/60);
+  const timeStr = mins > 0 ? mins+'m '+((secs%60))+'s' : secs+'s';
+  overlayMsg.innerHTML = 'You are the biggest fish in the ocean!<br>'+
+    'Score: <b>'+score+'</b>' + (score >= highScore ? ' <span style="color:#ffd700">NEW HIGH SCORE!</span>' : ' &bull; Best: '+highScore) + '<br>'+
+    '<span style="font-size:13px;color:#6a8db8">'+
+    'Time: '+timeStr+' &bull; Fish eaten: '+totalFishEaten+' &bull; Best combo: x'+maxCombo+
+    '</span>' + unlockMsg;
+  document.getElementById('restart-btn').style.display = '';
+  document.getElementById('home-section').style.display = 'none';
+  overlay.classList.remove('hidden');
+}
+
+// ── DRAWING ──
+function drawFish(x, y, size, tier, facing, tailPhase, isPlayer, chasing){
+  const t = TIERS[tier];
+  const s = size;
+  const bodyW = s;
+  const bodyH = s * t.bodyH;
+  const tailAmp = s*0.35;
+  const tailWag = Math.sin(tailPhase*5)*tailAmp*0.3;
+  const cx = x - camera.x;
+  const cy = y - camera.y;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(facing, 1);
+
+  // Glow for chasing NPCs
+  if(chasing){
+    ctx.shadowColor = 'rgba(255,60,60,0.5)';
+    ctx.shadowBlur = 20;
+  }
+
+  // Player glow during freeze
+  if(isPlayer && boostTimer>0){
+    ctx.shadowColor = 'rgba(125,249,255,0.6)';
+    ctx.shadowBlur = 25;
+  }
+
+  const baseColor = t.color;
+
+  // Tail
+  ctx.beginPath();
+  ctx.moveTo(-bodyW*0.35, 0);
+  ctx.lineTo(-bodyW*0.7 + tailWag, -bodyH*0.5);
+  ctx.quadraticCurveTo(-bodyW*0.45 + tailWag*0.5, 0, -bodyW*0.7 + tailWag, bodyH*0.5);
+  ctx.closePath();
+  ctx.fillStyle = baseColor;
+  ctx.globalAlpha = 0.8;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Body (ellipse)
+  ctx.beginPath();
+  ctx.ellipse(0, 0, bodyW*0.5, bodyH, 0, 0, Math.PI*2);
+  ctx.fillStyle = baseColor;
+  ctx.fill();
+
+  // Belly highlight
+  ctx.beginPath();
+  ctx.ellipse(bodyW*0.05, bodyH*0.15, bodyW*0.35, bodyH*0.5, 0, 0, Math.PI);
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fill();
+
+  // Dorsal fin(s)
+  if(t.fins >= 1){
+    ctx.beginPath();
+    ctx.moveTo(-bodyW*0.1, -bodyH*0.85);
+    ctx.quadraticCurveTo(bodyW*0.05, -bodyH*1.3, bodyW*0.2, -bodyH*0.8);
+    ctx.lineTo(bodyW*0.05, -bodyH*0.75);
+    ctx.closePath();
+    ctx.fillStyle = baseColor;
+    ctx.globalAlpha = 0.7;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // Pectoral fins
+  if(t.fins >= 2){
+    ctx.beginPath();
+    ctx.moveTo(bodyW*0.05, bodyH*0.3);
+    ctx.quadraticCurveTo(bodyW*0.15, bodyH*0.9, -bodyW*0.1, bodyH*0.6);
+    ctx.closePath();
+    ctx.fillStyle = baseColor;
+    ctx.globalAlpha = 0.6;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Eye
+  const eyeX = bodyW*0.22, eyeY = -bodyH*0.15, eyeR = s*0.08;
+  ctx.beginPath();
+  ctx.arc(eyeX, eyeY, eyeR, 0, Math.PI*2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(eyeX + eyeR*0.25, eyeY, eyeR*0.55, 0, Math.PI*2);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+
+  // Mouth line
+  ctx.beginPath();
+  ctx.moveTo(bodyW*0.42, bodyH*0.05);
+  ctx.quadraticCurveTo(bodyW*0.35, bodyH*0.18, bodyW*0.25, bodyH*0.15);
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Player ring indicator
+  if(isPlayer){
+    ctx.beginPath();
+    ctx.arc(0, 0, s*0.6, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4,4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawJellyfish(x, y, size, tier, facing, tailPhase, isPlayer, chasing){
+  const t = TIERS[tier];
+  const s = size;
+  const cx = x - camera.x;
+  const cy = y - camera.y;
+  const baseColor = t.color;
+  const pulse = 1 + Math.sin(tailPhase * 3) * 0.06;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(facing, 1);
+
+  if(chasing){ ctx.shadowColor = 'rgba(255,60,60,0.5)'; ctx.shadowBlur = 20; }
+  if(isPlayer && boostTimer > 0){ ctx.shadowColor = 'rgba(125,249,255,0.6)'; ctx.shadowBlur = 25; }
+
+  // Bell / dome
+  const bellW = s * 0.5 * pulse;
+  const bellH = s * 0.4 * pulse;
+  ctx.beginPath();
+  ctx.ellipse(0, -bellH * 0.1, bellW, bellH, 0, Math.PI, 0);
+  ctx.quadraticCurveTo(bellW * 0.5, bellH * 0.3, 0, bellH * 0.15);
+  ctx.quadraticCurveTo(-bellW * 0.5, bellH * 0.3, -bellW, -bellH * 0.1);
+  ctx.closePath();
+  ctx.fillStyle = baseColor;
+  ctx.globalAlpha = 0.7;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Inner glow highlight
+  ctx.beginPath();
+  ctx.ellipse(0, -bellH * 0.2, bellW * 0.5, bellH * 0.4, 0, Math.PI, 0);
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fill();
+
+  // Spots on bell
+  for(let i = 0; i < 5; i++){
+    const dotX = (i - 2) * bellW * 0.22;
+    const dotY = -bellH * (0.15 + (i % 2) * 0.15);
+    ctx.beginPath();
+    ctx.arc(dotX, dotY, s * 0.025, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fill();
+  }
+
+  // Tentacles
+  const tentCount = 6;
+  const tentLen = s * 0.7;
+  ctx.lineWidth = Math.max(1.2, s * 0.02);
+  ctx.lineCap = 'round';
+  for(let i = 0; i < tentCount; i++){
+    const tx = (i - (tentCount - 1) / 2) * (bellW * 0.28);
+    ctx.beginPath();
+    ctx.moveTo(tx, bellH * 0.1);
+    const segments = 8;
+    for(let j = 1; j <= segments; j++){
+      const frac = j / segments;
+      const waveOff = Math.sin(tailPhase * 4 + i * 0.8 + frac * 3) * s * 0.12;
+      ctx.lineTo(tx + waveOff, bellH * 0.1 + frac * tentLen);
+    }
+    ctx.strokeStyle = baseColor;
+    ctx.globalAlpha = 0.45 - 0.15 * (i % 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // Eye
+  const eyeX = s * 0.1, eyeY = -bellH * 0.15, eyeR = s * 0.07;
+  ctx.beginPath();
+  ctx.arc(eyeX, eyeY, eyeR, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(eyeX + eyeR * 0.25, eyeY, eyeR * 0.55, 0, Math.PI * 2);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+
+  // Player ring
+  if(isPlayer){
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.6, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawSeahorse(x, y, size, tier, facing, tailPhase, isPlayer, chasing){
+  const t = TIERS[tier];
+  const s = size;
+  const cx = x - camera.x;
+  const cy = y - camera.y;
+  const baseColor = t.color;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(facing, 1);
+
+  if(chasing){ ctx.shadowColor = 'rgba(255,60,60,0.5)'; ctx.shadowBlur = 20; }
+  if(isPlayer && boostTimer > 0){ ctx.shadowColor = 'rgba(125,249,255,0.6)'; ctx.shadowBlur = 25; }
+
+  const headR = s * 0.18;
+  const bodyH = s * 0.7;
+  const snoutLen = s * 0.22;
+
+  // S-curved body path
+  ctx.beginPath();
+  ctx.moveTo(0, -bodyH * 0.4);
+  // Upper curve (chest/belly)
+  ctx.bezierCurveTo(
+    s * 0.25, -bodyH * 0.25,
+    s * 0.28, bodyH * 0.05,
+    s * 0.12, bodyH * 0.2
+  );
+  // Lower curve to tail
+  ctx.bezierCurveTo(
+    -s * 0.05, bodyH * 0.35,
+    -s * 0.2, bodyH * 0.45,
+    -s * 0.12, bodyH * 0.55
+  );
+  // Curled tail with animation
+  const curlPhase = Math.sin(tailPhase * 3) * 0.15;
+  ctx.bezierCurveTo(
+    -s * 0.05, bodyH * 0.6,
+    -s * (0.25 + curlPhase), bodyH * 0.65,
+    -s * (0.2 + curlPhase), bodyH * 0.5
+  );
+  ctx.bezierCurveTo(
+    -s * (0.15 + curlPhase * 0.5), bodyH * 0.4,
+    -s * 0.08, bodyH * 0.42,
+    -s * 0.12, bodyH * 0.55
+  );
+  // Back side (thinner)
+  ctx.bezierCurveTo(
+    -s * 0.25, bodyH * 0.3,
+    -s * 0.15, bodyH * 0.05,
+    -s * 0.1, -bodyH * 0.15
+  );
+  ctx.bezierCurveTo(
+    -s * 0.08, -bodyH * 0.3,
+    -s * 0.02, -bodyH * 0.4,
+    0, -bodyH * 0.4
+  );
+  ctx.closePath();
+  ctx.fillStyle = baseColor;
+  ctx.globalAlpha = 0.85;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Belly highlight
+  ctx.beginPath();
+  ctx.ellipse(s * 0.12, 0, s * 0.1, bodyH * 0.2, 0.2, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fill();
+
+  // Dorsal fin ridge (on the back)
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.08, -bodyH * 0.1);
+  for(let i = 0; i < 5; i++){
+    const frac = i / 4;
+    const fy = -bodyH * 0.1 + frac * bodyH * 0.3;
+    const fx = -s * 0.12 - Math.sin(frac * Math.PI) * s * 0.12;
+    ctx.lineTo(fx, fy);
+  }
+  ctx.lineTo(-s * 0.1, bodyH * 0.2);
+  ctx.fillStyle = baseColor;
+  ctx.globalAlpha = 0.5;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Head (rounded)
+  ctx.beginPath();
+  ctx.arc(s * 0.02, -bodyH * 0.4, headR, 0, Math.PI * 2);
+  ctx.fillStyle = baseColor;
+  ctx.fill();
+
+  // Coronet bump on top of head
+  ctx.beginPath();
+  ctx.moveTo(-headR * 0.3, -bodyH * 0.4 - headR * 0.8);
+  ctx.lineTo(0, -bodyH * 0.4 - headR * 1.35);
+  ctx.lineTo(headR * 0.3, -bodyH * 0.4 - headR * 0.8);
+  ctx.closePath();
+  ctx.fillStyle = baseColor;
+  ctx.globalAlpha = 0.7;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Snout
+  ctx.beginPath();
+  ctx.moveTo(s * 0.02 + headR * 0.7, -bodyH * 0.4 - headR * 0.1);
+  ctx.lineTo(s * 0.02 + headR + snoutLen, -bodyH * 0.4);
+  ctx.lineTo(s * 0.02 + headR * 0.7, -bodyH * 0.4 + headR * 0.15);
+  ctx.closePath();
+  ctx.fillStyle = baseColor;
+  ctx.fill();
+
+  // Eye
+  const eyeX = s * 0.06, eyeY = -bodyH * 0.42, eyeR = s * 0.06;
+  ctx.beginPath();
+  ctx.arc(eyeX, eyeY, eyeR, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(eyeX + eyeR * 0.3, eyeY, eyeR * 0.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#111';
+  ctx.fill();
+
+  // Player ring
+  if(isPlayer){
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.6, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawCreature(x, y, size, tier, facing, tailPhase, isPlayer, chasing, creatureType){
+  const type = creatureType || 'fish';
+  if(type === 'jellyfish') drawJellyfish(x, y, size, tier, facing, tailPhase, isPlayer, chasing);
+  else if(type === 'seahorse') drawSeahorse(x, y, size, tier, facing, tailPhase, isPlayer, chasing);
+  else drawFish(x, y, size, tier, facing, tailPhase, isPlayer, chasing);
+}
+
+function drawShrimp(s){
+  const cx = s.x - camera.x, cy = s.y - camera.y;
+  if(cx < -40 || cx > W+40 || cy < -40 || cy > H+40) return;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(s.vx > 0 ? 1 : -1, 1);
+
+  // Glow
+  const glow = 0.4 + Math.sin(s.sparkle*3)*0.3;
+  ctx.shadowColor = 'rgba(255,215,0,'+glow+')';
+  ctx.shadowBlur = 18;
+
+  // Body
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 10, 4, 0, 0, Math.PI*2);
+  ctx.fillStyle = '#ffd700';
+  ctx.fill();
+
+  // Tail
+  ctx.beginPath();
+  ctx.moveTo(-8, 0);
+  ctx.lineTo(-14, -4);
+  ctx.lineTo(-14, 4);
+  ctx.closePath();
+  ctx.fillStyle = '#ffaa00';
+  ctx.fill();
+
+  // Sparkle particles
+  for(let i=0;i<3;i++){
+    const ang = s.sparkle*2 + i*2.1;
+    const sr = 12 + Math.sin(ang*1.3)*5;
+    const sx = Math.cos(ang)*sr, sy = Math.sin(ang)*sr;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 1.5, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,200,'+(0.3+Math.sin(ang)*0.3)+')';
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawBubbles(){
+  for(let b of bubbles){
+    const bx = b.x - camera.x, by = b.y - camera.y;
+    if(bx<-20||bx>W+20||by<-20||by>H+20) continue;
+    ctx.beginPath();
+    ctx.arc(bx, by, b.r, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(180,220,255,'+b.opacity+')';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(bx - b.r*0.3, by - b.r*0.3, b.r*0.3, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,'+(b.opacity*0.6)+')';
+    ctx.fill();
+  }
+}
+
+function drawRays(){
+  for(let r of rays){
+    const rx = r.x - camera.x;
+    ctx.save();
+    const grad = ctx.createLinearGradient(rx, -10, rx, H);
+    grad.addColorStop(0, 'rgba(120,200,255,'+r.opacity*1.5+')');
+    grad.addColorStop(0.6, 'rgba(80,160,220,'+r.opacity*0.5+')');
+    grad.addColorStop(1, 'rgba(40,80,140,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(rx - r.width*0.3, -10);
+    ctx.lineTo(rx + r.width*0.3, -10);
+    ctx.lineTo(rx + r.width*0.7, H);
+    ctx.lineTo(rx - r.width*0.7, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawBackground(){
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  // Tint based on depth in world
+  const depthRatio = clamp(camera.y / (WORLD_H - H), 0, 1);
+  const b = BIOMES[selectedBiome];
+  const r1 = Math.round(lerp(b.bgTop[0], b.bgBot[0], depthRatio));
+  const g1 = Math.round(lerp(b.bgTop[1], b.bgBot[1], depthRatio));
+  const b1 = Math.round(lerp(b.bgTop[2], b.bgBot[2], depthRatio));
+  const r2 = Math.round(lerp(b.bgBot[0], Math.max(1,b.bgBot[0]-2), depthRatio));
+  const g2 = Math.round(lerp(b.bgBot[1], Math.max(1,b.bgBot[1]-3), depthRatio));
+  const b2 = Math.round(lerp(b.bgBot[2], Math.max(1,b.bgBot[2]-5), depthRatio));
+  grad.addColorStop(0, `rgb(${r1},${g1},${b1})`);
+  grad.addColorStop(1, `rgb(${r2},${g2},${b2})`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawSeafloor(){
+  const floorY = WORLD_H - 60 - camera.y;
+  if(floorY > H + 20) return;
+  ctx.save();
+  const grad = ctx.createLinearGradient(0, floorY, 0, floorY+80);
+
+  if(selectedBiome === 1){
+    // Coral Reef: pinkish/coral floor
+    grad.addColorStop(0, 'rgba(80,30,50,0.45)');
+    grad.addColorStop(1, 'rgba(50,15,30,0.6)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, floorY, W, H - floorY + 20);
+    // Coral structures
+    for(let i=0;i<20;i++){
+      const sx = (i*213 + 50) - camera.x % (WORLD_W);
+      if(sx < -30 || sx > W+30) continue;
+      const swayT = performance.now()*0.0008 + i;
+      const sway = Math.sin(swayT)*4;
+      const h = 25 + (i*7)%35;
+      // Coral branch (pink/orange)
+      const hue = (i * 47) % 60 + 330; // pinks/reds/oranges
+      ctx.beginPath();
+      ctx.moveTo(sx, floorY+5);
+      ctx.quadraticCurveTo(sx+sway-8, floorY - h*0.5, sx+sway-10, floorY - h);
+      ctx.strokeStyle = `hsla(${hue},70%,55%,0.45)`;
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      // Second branch
+      ctx.beginPath();
+      ctx.moveTo(sx, floorY+5);
+      ctx.quadraticCurveTo(sx+sway+8, floorY - h*0.4, sx+sway+12, floorY - h*0.8);
+      ctx.strokeStyle = `hsla(${(hue+30)%360},65%,50%,0.4)`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      // Coral bulb tip
+      ctx.beginPath();
+      ctx.arc(sx+sway-10, floorY - h, 4, 0, Math.PI*2);
+      ctx.fillStyle = `hsla(${hue},70%,65%,0.5)`;
+      ctx.fill();
+    }
+  } else if(selectedBiome === 2){
+    // Abyssal Depths: dark rocky floor
+    grad.addColorStop(0, 'rgba(12,15,25,0.5)');
+    grad.addColorStop(1, 'rgba(5,8,15,0.7)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, floorY, W, H - floorY + 20);
+    // Rocky outcrops and bioluminescent spots
+    for(let i=0;i<20;i++){
+      const sx = (i*213 + 50) - camera.x % (WORLD_W);
+      if(sx < -30 || sx > W+30) continue;
+      const h = 15 + (i*7)%25;
+      // Dark rock
+      ctx.beginPath();
+      ctx.moveTo(sx - 8, floorY+5);
+      ctx.lineTo(sx - 3, floorY - h);
+      ctx.lineTo(sx + 5, floorY - h * 0.7);
+      ctx.lineTo(sx + 10, floorY+5);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(20,25,35,0.5)';
+      ctx.fill();
+      // Bioluminescent spot
+      if(i % 3 === 0){
+        const glowT = performance.now()*0.002 + i*1.7;
+        const glowA = 0.3 + Math.sin(glowT)*0.2;
+        const colors = ['rgba(80,200,255,','rgba(100,255,180,','rgba(180,100,255,'];
+        ctx.beginPath();
+        ctx.arc(sx, floorY - h*0.5, 3, 0, Math.PI*2);
+        ctx.fillStyle = colors[i%3] + glowA + ')';
+        ctx.shadowColor = colors[i%3] + '0.6)';
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+  } else {
+    // Open Ocean: green seaweed (default)
+    grad.addColorStop(0, 'rgba(30,60,50,0.4)');
+    grad.addColorStop(1, 'rgba(15,30,25,0.6)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, floorY, W, H - floorY + 20);
+    for(let i=0;i<20;i++){
+      const sx = (i*213 + 50) - camera.x % (WORLD_W);
+      if(sx < -30 || sx > W+30) continue;
+      const swayT = performance.now()*0.001 + i;
+      const sway = Math.sin(swayT)*8;
+      const h = 30 + (i*7)%40;
+      ctx.beginPath();
+      ctx.moveTo(sx, floorY+5);
+      ctx.quadraticCurveTo(sx+sway, floorY - h*0.5, sx+sway*0.5, floorY - h);
+      ctx.strokeStyle = 'rgba(40,120,60,0.35)';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// ── SIZE INDICATORS ──
+function drawSizeIndicators(){
+  for(let n of npcs){
+    if(!n.alive) continue;
+    const cx = n.x - camera.x, cy = n.y - camera.y;
+    if(cx < -100 || cx > W+100 || cy < -100 || cy > H+100) continue;
+    const d = dist(player, n);
+    if(d > 300) continue;
+    // Small dot above fish: green = edible, red = danger
+    const dotY = cy - n.size*0.6 - 8;
+    if(player.size > n.size){
+      ctx.beginPath();
+      ctx.arc(cx, dotY, 3, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(80,255,120,0.7)';
+      ctx.fill();
+    } else if(n.size > player.size){
+      // Emphasize danger — bigger dot, red glow, pulse when close
+      const dangerProximity = 1 - d / 300; // 1 when very close, 0 at edge
+      const pulse = 0.7 + Math.sin(performance.now()*0.006)*0.3;
+      const dotR = 3.5 + dangerProximity * 2.5; // grows from 3.5 to 6 when close
+      // Outer glow
+      ctx.save();
+      ctx.shadowColor = 'rgba(255,30,30,0.8)';
+      ctx.shadowBlur = 8 + dangerProximity * 10;
+      ctx.beginPath();
+      ctx.arc(cx, dotY, dotR * pulse, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,50,50,' + (0.7 + dangerProximity*0.3) + ')';
+      ctx.fill();
+      ctx.restore();
+      // Inner bright core
+      ctx.beginPath();
+      ctx.arc(cx, dotY, dotR * 0.5, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,180,180,0.9)';
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, dotY, 3, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,100,0.6)';
+      ctx.fill();
+    }
+  }
+}
+
+// ── PARTICLES DRAW ──
+function drawParticles(){
+  for(const p of particles){
+    const px = p.x - camera.x, py = p.y - camera.y;
+    if(px < -20 || px > W+20 || py < -20 || py > H+20) continue;
+    ctx.beginPath();
+    ctx.arc(px, py, p.r * p.life, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ── EDGE WARNING ──
+function drawEdgeWarning(){
+  const margin = 200;
+  const px = player.x, py = player.y;
+  let intensity = 0;
+  // Check proximity to each edge
+  if(px < margin) intensity = Math.max(intensity, 1 - px/margin);
+  if(px > WORLD_W - margin) intensity = Math.max(intensity, 1 - (WORLD_W - px)/margin);
+  if(py < margin) intensity = Math.max(intensity, 1 - py/margin);
+  if(py > WORLD_H - margin) intensity = Math.max(intensity, 1 - (WORLD_H - py)/margin);
+  if(intensity <= 0) return;
+  intensity = Math.min(intensity, 0.6);
+  // Draw vignette
+  const grad = ctx.createRadialGradient(W/2, H/2, Math.min(W,H)*0.3, W/2, H/2, Math.max(W,H)*0.75);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(180,40,30,'+intensity*0.35+')');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ── SCREEN FLASH ──
+function drawScreenFlash(){
+  if(screenFlash <= 0) return;
+  ctx.fillStyle = screenFlashColor;
+  ctx.globalAlpha = screenFlash * 0.3;
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = 1;
+}
+
+function drawBiomeAnnouncement(){
+  if(biomeFlash <= 0) return;
+  const alpha = biomeFlash < 0.2 ? biomeFlash / 0.2 : (biomeFlash > 0.8 ? (1 - biomeFlash) / 0.2 : 1);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 48px Fredoka, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,' + (alpha * 0.9) + ')';
+  ctx.shadowColor = 'rgba(125,249,255,' + (alpha * 0.7) + ')';
+  ctx.shadowBlur = 30;
+  ctx.fillText(biomeFlashName, W / 2, H * 0.35);
+  ctx.font = '400 22px Fredoka, sans-serif';
+  ctx.fillStyle = 'rgba(200,230,255,' + (alpha * 0.7) + ')';
+  ctx.shadowBlur = 15;
+  ctx.fillText('New Biome Entered', W / 2, H * 0.35 + 45);
+  ctx.restore();
+}
+
+// ── MINIMAP ──
+function drawMinimap(){
+  const mW = 160, mH = 120, pad = 14;
+  const mx = W - mW - pad, my = H - mH - pad;
+  const scaleX = mW / WORLD_W, scaleY = mH / WORLD_H;
+
+  ctx.save();
+  // Background
+  ctx.fillStyle = 'rgba(3,11,26,0.7)';
+  ctx.strokeStyle = 'rgba(125,249,255,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(mx, my, mW, mH, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  // Viewport rectangle
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(mx + camera.x*scaleX, my + camera.y*scaleY, W*scaleX, H*scaleY);
+
+  // NPC dots
+  for(const n of npcs){
+    if(!n.alive) continue;
+    const dx = mx + n.x*scaleX, dy = my + n.y*scaleY;
+    ctx.fillStyle = player.size > n.size ? 'rgba(80,255,120,0.6)' : 'rgba(255,70,70,0.5)';
+    ctx.fillRect(dx-0.8, dy-0.8, 1.6, 1.6);
+  }
+
+  // Shrimp dots
+  for(const s of shrimps){
+    const dx = mx + s.x*scaleX, dy = my + s.y*scaleY;
+    ctx.fillStyle = 'rgba(255,215,0,0.8)';
+    ctx.fillRect(dx-1.2, dy-1.2, 2.4, 2.4);
+  }
+
+  // Chest dots
+  for(const c of chests){
+    if(c.opened) continue;
+    const dx = mx + c.x*scaleX, dy = my + c.y*scaleY;
+    ctx.fillStyle = 'rgba(180,120,40,0.8)';
+    ctx.fillRect(dx-1.5, dy-1.5, 3, 3);
+  }
+
+  // Player dot
+  const ppx = mx + player.x*scaleX, ppy = my + player.y*scaleY;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(ppx, ppy, 2.5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = TIERS[player.tier].color;
+  ctx.beginPath();
+  ctx.arc(ppx, ppy, 1.8, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ── FLOATING TEXT DRAW ──
+function drawFloatingTexts(){
+  for(const ft of floatingTexts){
+    const fx = ft.x - camera.x, fy = ft.y - camera.y;
+    if(fx < -100 || fx > W+100 || fy < -100 || fy > H+100) continue;
+    ctx.save();
+    ctx.globalAlpha = ft.life;
+    ctx.font = (ft.big ? 'bold 20px' : '600 14px') + ' Fredoka, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = ft.color;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(ft.text, fx, fy);
+    ctx.restore();
+  }
+}
+
+// ── DANGER ARROWS ──
+function drawDangerArrows(){
+  const pad = 40;
+  for(const n of npcs){
+    if(!n.alive || n.size <= player.size) continue;
+    const d = dist(player, n);
+    if(d > 600 || d < 300) continue;
+    const sx = n.x - camera.x, sy = n.y - camera.y;
+    // Only draw if offscreen
+    if(sx > pad && sx < W-pad && sy > pad && sy < H-pad) continue;
+    const ang = Math.atan2(n.y - player.y, n.x - player.x);
+    const ax = clamp(sx, pad, W-pad);
+    const ay = clamp(sy, pad, H-pad);
+    const pulse = 0.5 + Math.sin(performance.now()*0.005)*0.3;
+    ctx.save();
+    ctx.translate(ax, ay);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(-6, -6);
+    ctx.lineTo(-3, 0);
+    ctx.lineTo(-6, 6);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,60,60,'+pulse+')';
+    ctx.shadowColor = 'rgba(255,0,0,0.4)';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ── DEPTH METER ──
+function drawDepthMeter(){
+  const depthPct = player.y / WORLD_H;
+  const depthM = Math.round(depthPct * 300); // 0-300m
+  ctx.save();
+  ctx.font = '500 12px JetBrains Mono, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(120,180,220,0.5)';
+  ctx.fillText(depthM + 'm depth', 24, H - 20);
+  ctx.restore();
+}
+
+// ── COMBO HUD ──
+function drawComboHud(){
+  if(comboCount < 2) return;
+  const mul = Math.min(comboCount, 10);
+  const pulse = 1 + Math.sin(performance.now()*0.008)*0.08;
+  const fontSize = Math.round((comboCount >= 8 ? 28 : comboCount >= 6 ? 25 : 22) * pulse);
+  ctx.save();
+  ctx.font = 'bold ' + fontSize + 'px Fredoka, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = comboCount >= 8 ? '#ff4444' : comboCount >= 6 ? '#ffd700' : comboCount >= 3 ? '#ff9944' : '#7df9ff';
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 6;
+  const comboWords = {6:'AMAZING!',7:'AWESOME!',8:'INCREDIBLE!',9:'UNSTOPPABLE!',10:'LEGENDARY!'};
+  let label = 'COMBO x' + mul + '!';
+  if(comboWords[comboCount]) label += ' ' + comboWords[comboCount];
+  ctx.fillText(label, W/2, 65);
+  // Timer bar
+  const barW = 80, barH = 3;
+  const fill = comboTimer / COMBO_WINDOW;
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(W/2 - barW/2, 72, barW, barH);
+  ctx.fillStyle = comboCount >= 6 ? '#ffd700' : comboCount >= 3 ? '#ff9944' : '#7df9ff';
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(W/2 - barW/2, 72, barW*fill, barH);
+  ctx.restore();
+}
+
+// ── PLAYER TRAIL DRAW ──
+function drawPlayerTrail(){
+  for(const tb of playerTrail){
+    const bx = tb.x - camera.x, by = tb.y - camera.y;
+    if(bx < -10 || bx > W+10 || by < -10 || by > H+10) continue;
+    ctx.beginPath();
+    ctx.arc(bx, by, tb.r * (0.5 + tb.life*0.5), 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(180,220,255,'+(tb.life*0.35)+')';
+    ctx.fill();
+    // Tiny highlight
+    ctx.beginPath();
+    ctx.arc(bx - tb.r*0.2, by - tb.r*0.2, tb.r*0.2, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,'+(tb.life*0.2)+')';
+    ctx.fill();
+  }
+}
+
+// ── TREASURE CHEST DRAW ──
+function drawChests(){
+  for(const c of chests){
+    if(c.opened) continue;
+    const cx = c.x - camera.x, cy = c.y - camera.y;
+    if(cx < -40 || cx > W+40 || cy < -40 || cy > H+40) continue;
+
+    const shimmer = 0.4 + Math.sin(c.shimmer)*0.2;
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Glow
+    ctx.shadowColor = 'rgba(255,200,50,'+shimmer+')';
+    ctx.shadowBlur = 14;
+
+    // Chest base (rounded rectangle)
+    const w = c.size, h = c.size*0.7;
+    ctx.beginPath();
+    ctx.roundRect(-w, -h*0.4, w*2, h, 3);
+    ctx.fillStyle = '#8B4513';
+    ctx.fill();
+    ctx.strokeStyle = '#5a2d0c';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Chest lid (slightly open, arc shape)
+    ctx.beginPath();
+    ctx.moveTo(-w, -h*0.4);
+    ctx.lineTo(-w, -h*0.7);
+    ctx.quadraticCurveTo(0, -h*1.2, w, -h*0.7);
+    ctx.lineTo(w, -h*0.4);
+    ctx.closePath();
+    ctx.fillStyle = '#a0522d';
+    ctx.fill();
+    ctx.stroke();
+
+    // Gold band
+    ctx.beginPath();
+    ctx.roundRect(-w*0.15, -h*0.55, w*0.3, h*0.3, 2);
+    ctx.fillStyle = '#ffd700';
+    ctx.fill();
+
+    // Sparkles
+    for(let i=0;i<2;i++){
+      const ang = c.shimmer*2 + i*3.14;
+      const sr = c.size + 4 + Math.sin(ang*1.5)*3;
+      const sx = Math.cos(ang)*sr, sy = Math.sin(ang)*sr - h*0.3;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 1.5, 0, Math.PI*2);
+      ctx.fillStyle = 'rgba(255,255,180,'+(0.4+Math.sin(ang)*0.3)+')';
+      ctx.fill();
+    }
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+}
+
+// ── TUTORIAL OVERLAY ──
+function drawTutorial(){
+  const alpha = tutorialActive ? Math.min(1, tutorialStepTimer / 500) : tutorialFadeOut;
+  if(alpha <= 0) return;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Step 0: Movement hint (centered on screen)
+  if(tutorialStep === 0 || !tutorialActive){
+    const moveAlpha = tutorialActive && tutorialStep === 0 ? 1 : 0;
+    if(moveAlpha > 0 || !tutorialActive){
+      const a = tutorialActive ? moveAlpha * alpha : alpha * 0.5;
+      ctx.globalAlpha = a;
+      ctx.font = '600 16px Fredoka, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#7df9ff';
+      ctx.shadowColor = 'rgba(0,0,0,0.7)';
+      ctx.shadowBlur = 6;
+      if(tutorialStep === 0 && tutorialActive){
+        const bob = Math.sin(performance.now() * 0.003) * 3;
+        const moveHints = {mouse:'Move your mouse to swim around', wasd:'Use W A S D to swim around', arrows:'Use Arrow Keys to swim around', touch:'Use the joystick to swim around'};
+        ctx.fillText(moveHints[controlMode], W/2, H/2 - 60 + bob);
+        // Pulsing arrow pointing toward mouse
+        const arrowPulse = 0.5 + Math.sin(performance.now()*0.005)*0.5;
+        ctx.globalAlpha = a * arrowPulse;
+        ctx.font = '24px Fredoka, sans-serif';
+        ctx.fillText('\u2193', W/2, H/2 - 35);
+      }
+    }
+  }
+
+  ctx.globalAlpha = alpha;
+
+  // Step 1+: Annotate nearby fish with green/red dots + labels
+  if(tutorialStep >= 1){
+    let greenLabeled = false, redLabeled = false;
+    // Find closest green and red fish
+    let closestGreen = null, closestRed = null;
+    let greenDist = Infinity, redDist = Infinity;
+    for(const n of npcs){
+      if(!n.alive) continue;
+      const d = dist(player, n);
+      if(d > 350) continue;
+      const sx = n.x - camera.x, sy = n.y - camera.y;
+      if(sx < 20 || sx > W-20 || sy < 20 || sy > H-20) continue;
+      if(player.size > n.size && d < greenDist){ greenDist = d; closestGreen = n; }
+      if(n.size > player.size && d < redDist){ redDist = d; closestRed = n; }
+    }
+
+    // Draw tutorial annotation for a fish
+    function drawFishAnnotation(n, isEdible){
+      const sx = n.x - camera.x, sy = n.y - camera.y;
+      const dotY = sy - n.size * 0.6 - 10;
+      const pulse = 0.7 + Math.sin(performance.now()*0.004)*0.3;
+
+      // Enlarged pulsing indicator ring
+      ctx.beginPath();
+      ctx.arc(sx, dotY, 6 + pulse*2, 0, Math.PI*2);
+      ctx.strokeStyle = isEdible ? 'rgba(80,255,120,'+alpha*0.7+')' : 'rgba(255,70,70,'+alpha*0.7+')';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Connecting line from label to dot
+      const labelY = dotY - 24;
+      ctx.beginPath();
+      ctx.moveTo(sx, dotY - 8);
+      ctx.lineTo(sx, labelY + 6);
+      ctx.strokeStyle = 'rgba(255,255,255,'+alpha*0.3+')';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Label
+      ctx.font = '600 12px Fredoka, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = 4;
+      if(isEdible){
+        ctx.fillStyle = 'rgba(80,255,120,'+alpha+')';
+        ctx.fillText('Safe to eat!', sx, labelY);
+      } else {
+        ctx.fillStyle = 'rgba(255,70,70,'+alpha+')';
+        ctx.fillText('DANGER - avoid!', sx, labelY);
+      }
+    }
+
+    if(closestGreen && !greenLabeled){ drawFishAnnotation(closestGreen, true); greenLabeled = true; }
+    if(closestRed && !redLabeled){ drawFishAnnotation(closestRed, false); redLabeled = true; }
+
+    // Legend box (bottom-left area, above depth meter)
+    const boxX = 20, boxY = H - 90;
+    ctx.fillStyle = 'rgba(3,11,26,0.7)';
+    ctx.strokeStyle = 'rgba(125,249,255,0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(boxX, boxY, 210, 58, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = '600 12px Fredoka, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 3;
+
+    // Green dot legend
+    ctx.beginPath();
+    ctx.arc(boxX + 14, boxY + 16, 4, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(80,255,120,0.9)';
+    ctx.fill();
+    ctx.fillStyle = '#c0e8d0';
+    ctx.fillText('Green dot = smaller, safe to eat', boxX + 24, boxY + 20);
+
+    // Red dot legend
+    ctx.beginPath();
+    ctx.arc(boxX + 14, boxY + 36, 4, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,70,70,0.9)';
+    ctx.fill();
+    ctx.fillStyle = '#e8c0c0';
+    ctx.fillText('Red dot = bigger, will eat you!', boxX + 24, boxY + 40);
+  }
+
+  // Step 2: Progress hint
+  if(tutorialStep >= 2){
+    const needed = xpForLevel(player.tier);
+    const remaining = Math.ceil(needed - player.xp);
+    const progAlpha = Math.min(1, tutorialStepTimer / 600) * alpha;
+    ctx.globalAlpha = progAlpha;
+    const bob = Math.sin(performance.now() * 0.003) * 2;
+    ctx.font = '600 14px Fredoka, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#7df9ff';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)';
+    ctx.shadowBlur = 5;
+    ctx.fillText('Eat ' + remaining + ' more fish to level up!', W/2, H - 30 + bob);
+
+    // Arrow pointing at XP bar
+    const barScreenX = 130, barScreenY = 62;
+    ctx.beginPath();
+    ctx.moveTo(barScreenX, barScreenY + 4);
+    ctx.lineTo(barScreenX - 5, barScreenY + 12);
+    ctx.lineTo(barScreenX + 5, barScreenY + 12);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(125,249,255,'+progAlpha*0.6+')';
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ── RENDER ──
+function draw(){
+  drawBackground();
+  if(!player) return; // not initialized yet
+  drawRays();
+  drawSeafloor();
+  drawChests();
+  drawBubbles();
+  drawPlayerTrail();
+
+  // Draw NPCs (sorted by size for layering)
+  const sortedNpcs = npcs.filter(n => n.alive).sort((a,b) => a.size - b.size);
+  for(let n of sortedNpcs){
+    const cx = n.x - camera.x, cy = n.y - camera.y;
+    if(cx < -n.size*2 || cx > W+n.size*2 || cy < -n.size*2 || cy > H+n.size*2) continue;
+    drawCreature(n.x, n.y, n.size, n.tier, n.facing, n.tailPhase, false, n.chasing, n.creatureType);
+  }
+
+  // Shrimps
+  for(let s of shrimps) drawShrimp(s);
+
+  // Particles
+  drawParticles();
+
+  // Player
+  if(!gameOver && !gameWon){
+    drawCreature(player.x, player.y, player.size, player.tier, player.facing, player.tailPhase, true, false, BIOMES[selectedBiome].creatureType);
+  }
+
+  drawSizeIndicators();
+
+  // Tutorial hints (during tier 0)
+  if(tutorialActive || tutorialFadeOut > 0) drawTutorial();
+
+  // Floating score texts
+  drawFloatingTexts();
+
+  // Danger arrows for offscreen predators
+  drawDangerArrows();
+
+  // Edge warning vignette
+  drawEdgeWarning();
+
+  // Screen flash (level-up)
+  drawScreenFlash();
+  drawBiomeAnnouncement();
+
+  // Minimap
+  drawMinimap();
+
+  // Depth meter
+  drawDepthMeter();
+
+  // Combo display
+  drawComboHud();
+
+  // Cursor (mouse mode only)
+  if(controlMode === 'mouse' && !gameOver && !gameWon){
+    const cursorGlow = boostTimer > 0 ? 'rgba(125,249,255,0.5)' : 'rgba(125,249,255,0.2)';
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, 6, 0, Math.PI*2);
+    ctx.fillStyle = cursorGlow;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(mouseX, mouseY, 2, 0, Math.PI*2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+  }
+}
+
+// ── GAME LOOP ──
+let lastTime = 0;
+function loop(ts){
+  const dt = Math.min(ts - lastTime, 50) * getGameSpeed();
+  lastTime = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"75124c326cb447fe934cde04713ae013","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
